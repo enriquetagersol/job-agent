@@ -19,22 +19,23 @@ La puntuación orientará la comparación; no será una garantía de contrataci�
 
 ## Primera versión
 
-1. **Perfil:** recoger el CV, las capacidades y las preferencias del usuario.
-2. **Ofertas manuales:** permitir añadir ofertas para analizarlas y compararlas.
+1. **Perfil:** recoger el CV (opcional), las capacidades, las preferencias y la experiencia (años) del usuario.
+2. **Ofertas** el sistema busca en internet, recupera y analiza sus descripciones completas para compararlas con las capacidades y preferencias del usuario, no evalua slamente titulos o palabras clave.
 3. **Recomendaciones:** explicar el encaje y los gaps, mostrar el fit y ayudar a priorizar las ofertas añadidas.
-4. **Tracker:** mantener el seguimiento de cada oportunidad y candidatura, con su estado, notas y próximos pasos.
+4. **Generar CV:** cada oferta tendrá un botón «Generar CV» que generará un PDF adaptado a esa oferta, basándose exclusivamente en información confirmada del perfil, sin inventar experiencia, capacidades ni logros. El PDF estará disponible para revisión y descarga.
+5. **He aplicado:** cada oferta tendrá un botón «He aplicado» para registrar la oferta, su enlace, la fecha de candidatura y su estado. Permitirá asociar la versión exacta del CV utilizado: si existen varias versiones, el usuario elegirá cuál envió. También podrá aportar un CV externo o registrar la candidatura sin CV. Pulsar este botón registrará una candidatura realizada por el usuario; no enviará la candidatura.
+6. **Tracker:** mantener el seguimiento de cada oportunidad y candidatura, con su estado, notas y próximos pasos, y la versión exacta del CV utilizado cuando se haya asociado una.
 
-Esta versión se centrará en las ofertas añadidas manualmente. La búsqueda automática, la adaptación del CV y el envío de candidaturas pertenecen a etapas posteriores.
+La generación de CV adaptados y el registro de candidaturas forman parte de la primera versión. La búsqueda diaria y el envío de candidaturas desde la aplicación pertenecen a etapas posteriores.
 
 ## Etapas posteriores
 
 1. **Búsqueda diaria:** encontrar nuevas ofertas a partir del perfil y las preferencias.
-2. **Adaptación del CV:** proponer ajustes para una oferta concreta sin inventar experiencia, capacidades ni logros.
-3. **Envío de candidaturas:** preparar la candidatura y enviarla únicamente tras la aprobación explícita del usuario para esa candidatura, después de que pueda revisar la oferta y el contenido que se enviará.
+2. **Envío de candidaturas:** preparar la candidatura y enviarla únicamente tras la aprobación explícita del usuario para esa candidatura, después de que pueda revisar la oferta y el contenido que se enviará.
 
 ## Privacidad y secretos
 
-- No guardar en Git CV, datos personales, notas privadas del tracker ni candidaturas reales.
+- No guardar en Git CV (incluidos los PDFs generados y los CV externos), datos personales, notas privadas del tracker ni candidaturas reales.
 - No guardar en Git claves de API, contraseñas, tokens ni otros secretos.
 - Utilizar únicamente datos ficticios en ejemplos o futuras pruebas del repositorio.
 - Definir el almacenamiento y la protección de los datos personales antes de implementar su recogida. Este README no establece todavía una arquitectura ni un sistema de persistencia.
