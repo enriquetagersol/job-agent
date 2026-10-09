@@ -4,4 +4,7 @@
 __pycache__/
 /.datos/
 /perfil.tmp
+/user_profile.json
+/user_profile.tmp
+/.local_data/
 *.pdf

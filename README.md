@@ -1,140 +1,146 @@
 # job-agent
 
-Aplicación de búsqueda de empleo que compara ofertas con la trayectoria y las preferencias del usuario, explica por qué pueden interesarle y facilita el seguimiento de sus candidaturas.
+A job-search application that compares vacancies with the user's career history and preferences, explains why they may be interesting, and supports application tracking.
 
-Actualmente es un **prototipo local en Python y Streamlit para un único usuario**, con persistencia en archivos JSON. No tiene base de datos ni cuentas de múltiples usuarios.
+Currently a **local Python and Streamlit prototype for one user**, with JSON file persistence. It has no database or multi-user accounts. The interface remains in Spanish.
 
-## Objetivo de la primera versión
+## First-version scope
 
-1. **Perfil del usuario:** datos personales, trayectoria y preferencias, con CV de entrada opcional.
-2. **Búsqueda real de ofertas:** encontrar publicaciones y recuperar sus descripciones para analizarlas.
-3. **Recomendaciones explicadas y priorizadas:** distinguir interés, coincidencias, gaps confirmados e información pendiente.
-4. **CV personalizado para cada oferta:** generar un PDF adaptado, revisable y descargable, exclusivamente desde información confirmada.
-5. **Registro «He aplicado»:** registrar una candidatura realizada por el usuario y el CV exacto que utilizó, cuando corresponda.
-6. **Tracker de candidaturas:** consultar y actualizar estados, notas y próximos pasos.
+1. **User profile:** personal details, career history and preferences, with optional CV input.
+2. **Real vacancy search:** find publications and retrieve their descriptions for analysis.
+3. **Explained, prioritized recommendations:** distinguish interest, matches, confirmed gaps and missing information.
+4. **A personalized CV for each vacancy:** generate a reviewable, downloadable PDF using confirmed information only.
+5. **“He aplicado” registration:** record an application made by the user and the exact CV used, when applicable.
+6. **Application tracker:** view and update statuses, notes and next steps.
 
-Estos seis puntos son el alcance objetivo; su inclusión no significa que ya estén implementados o validados. El CV base es complementario y **no sustituye al CV personalizado por oferta**.
+These six items describe the target scope, not a claim that everything has been implemented or validated. The complementary base CV **does not replace a CV personalized for a vacancy**.
 
-## Estado actual
+## Current status
 
-### Implementado
+### Implemented
 
-- Perfil separado en «Datos personales», «Trayectoria profesional» y «Preferencias de búsqueda», con edición individual y completa, guardado y cancelación.
-- Experiencias, formación y proyectos editables y eliminables; skills confirmadas e idiomas con niveles.
-- Validaciones de campos obligatorios y fechas. Las entradas antiguas incompletas se conservan como pendientes.
-- Una lista de skills confirmadas común a la búsqueda, evaluación y CV; propuestas de IA con aceptación explícita, control de duplicados, eliminación y propuestas de fusión con confirmación.
-- Búsqueda con OpenAI y Tavily, recuperación de descripciones, eliminación de duplicados y hasta cinco recomendaciones explicadas, con evidencias consultables.
-- «Mejorar mi perfil»: preguntas generales, confirmación y persistencia de respuestas, edición y eliminación. «Actualizar recomendaciones» reevalúa ofertas existentes.
-- CV base en PDF, generado localmente, con vista previa y descarga. Actualmente no hay editor de texto del borrador en la interfaz.
-- Persistencia privada del perfil, evaluaciones, fuentes disponibles y decisiones sobre skills; diagnóstico local sin claves ni datos personales.
+- Profile tabs: “Datos personales”, “Trayectoria profesional” and “Preferencias de búsqueda”, with individual and full-profile editing, saving and cancellation.
+- Editable and removable work experience, education and projects; confirmed skills and declared language levels.
+- Required-field and date validation. Incomplete legacy entries remain available for correction.
+- One confirmed skill list shared by search, evaluation and CV generation; explicit acceptance of AI suggestions, duplicate checks, deletion and confirmed merges.
+- OpenAI and Tavily search, description retrieval, deduplication and up to five explained recommendations, with inspectable evidence.
+- “Mejorar mi perfil”: general questions, answer confirmation and persistence, editing and deletion. “Actualizar recomendaciones” reevaluates existing listings.
+- Locally generated base CV PDF, with preview and download. There is currently no draft text editor in the interface.
+- Private persistence of profiles, evaluations, available sources and skill decisions; local diagnostics without keys or personal data.
 
-### Pendiente de validar
+### Pending validation
 
-**El flujo de mejora progresiva del perfil todavía no se ha probado de extremo a extremo.** Falta comprobar con uso real la secuencia completa de preguntas, respuestas confirmadas, reapertura de la aplicación y reevaluación con el perfil enriquecido, sin nueva búsqueda web.
+**The progressive profile-improvement flow has not yet been tested end to end.** Real-use validation must cover questions, confirmed answers, reopening the application and reevaluation with the enriched profile without another web search.
 
-También queda validar de forma continuada la calidad de las explicaciones, la relevancia de las propuestas de skills, la recuperación de distintas páginas de empleo y la vista previa y descarga del CV en los navegadores utilizados.
+Explanation quality, skill-suggestion relevance, retrieval from different employment sites, and CV preview/download across the browsers used also require ongoing validation.
 
-Existen pruebas automatizadas de reglas, persistencia e interacción. Las pruebas con servicios simulados no validan por sí solas el flujo completo con servicios reales. Se han realizado pruebas puntuales de búsqueda real y revisión visual de PDFs con datos ficticios. **Programado no equivale a validado de extremo a extremo.**
+Automated tests cover rules, persistence and interactions. Mocked services do not establish that the full flow works with real services. Occasional real searches and visual PDF checks with fictional data have been performed. **Implemented does not mean validated end to end.**
 
-### Pendiente de implementar
+### Pending implementation
 
-- Incorporación de un CV de entrada opcional al perfil.
-- CV personalizado por oferta, registro «He aplicado» y tracker, en el orden indicado más abajo.
-- Funciones de etapas posteriores: base de datos, cuentas de múltiples usuarios, búsqueda diaria, envío de candidaturas y plantillas visuales de CV.
+- Optional CV input for the profile.
+- Per-vacancy personalized CV, “He aplicado” registration and tracker, in the order below.
+- Later-stage features: database, multi-user accounts, daily searches, application submission and visual CV templates.
 
-## Perfil y trayectoria
+## Profile and career history
 
-El perfil recoge:
+The profile includes:
 
-- **Datos personales:** nombre, apellidos, teléfono, email y LinkedIn. No bastan por sí solos para iniciar una búsqueda.
-- **Experiencia profesional:** empresa, puesto, fechas, responsabilidades y, opcionalmente, logros y herramientas. Se permiten varios empleos, incluidos los anteriores al actual.
-- **Formación:** institución, estudios, cursos o certificaciones, fechas y, opcionalmente, contenidos y proyectos.
-- **Proyectos:** nombre, descripción, contribución personal, herramientas y enlace opcional.
-- **Skills e idiomas:** una única lista de skills confirmadas y niveles de idioma declarados.
-- **Preferencias:** puestos objetivo, ubicaciones, modalidades, salario mínimo bruto anual, preferencias e importancias y «¿Qué buscas?». Se mantiene la exclusión opcional de la empresa actual; si hay varios empleos actuales, se puede elegir cuál excluir.
+- **Personal details:** first name, surname, phone, email and LinkedIn. Contact details alone do not enable search.
+- **Work experience:** company, role, dates, responsibilities and optional achievements/tools. Multiple jobs are supported, including past employment.
+- **Education:** institution, studies, courses or certifications, dates and optional learning content/projects.
+- **Projects:** name, description, personal contribution, tools and an optional URL.
+- **Skills and languages:** a single confirmed skill list and declared language levels.
+- **Search preferences:** target roles, locations, work arrangements, minimum gross annual salary, preferences, importance and “¿Qué buscas?”. The current employer can optionally be excluded; users with multiple current jobs can choose which employer to exclude.
 
-Cada campo o bloque puede editarse individualmente con «Guardar» y «Cancelar». Las experiencias, estudios y proyectos tienen sus propios editores. Guardar un bloque conserva los demás datos; cancelar mantiene el valor anterior. Editar o guardar no inicia búsquedas ni llamadas al modelo.
+Each field or block has its own “Guardar” and “Cancelar” editor. Work experience, education and projects have individual entry editors. Saving one block preserves other data; cancelling retains the previous value. Editing and saving do not initiate search or model calls.
 
-Para guardar una experiencia se exigen empresa, puesto, inicio y responsabilidades. Para formación se exigen institución, estudios e inicio. Ambas requieren fecha de fin salvo que sigan en curso, y rechazan fechas incoherentes. No se convierten rangos antiguos de años en empleos inventados.
+Work experience requires a company, role, start date and responsibilities. Education requires an institution, study title and start date. Both require an end date unless ongoing, and reject inconsistent dates. Legacy experience-year ranges are never converted into invented jobs.
 
-Las skills manuales se consideran confirmadas. Las sugeridas por IA solo se incorporan al aceptarlas; se puede editar su nombre antes de añadirlas. Se evitan duplicados por mayúsculas o espacios y las posibles equivalencias se fusionan solo tras confirmación. El límite es de **10 skills confirmadas**; las propuestas pendientes no consumen huecos. Cualquier skill puede eliminarse, conservando internamente sus fuentes. Las habilidades descartadas o eliminadas no deben volver a proponerse con la misma evidencia.
+Manually added skills are confirmed. AI suggestions become confirmed only when accepted, and their names can be edited before acceptance. Case and whitespace duplicates are prevented; possible equivalents merge only after confirmation. The limit is **10 confirmed skills**, excluding pending suggestions. Any confirmed skill can be removed while its sources remain internally recorded. Discarded or removed skills must not be suggested again from the same evidence.
 
-«Proponer skills» está en el resumen de skills y requiere contenido guardado sobre tareas, conocimientos o herramientas. Solo su pulsación inicia esa llamada al modelo. No se deducen skills del título de unos estudios. Se distingue aprendizaje en formación, aplicación en proyectos y trabajo profesional: un curso no acredita dominio avanzado ni experiencia laboral.
+“Proponer skills” appears in the skill summary and requires saved descriptions of tasks, knowledge or tools. Clicking it explicitly starts the model call. Study titles alone do not establish specific skills. Learning in education, application in projects and professional work are distinguished: completing a course does not establish advanced proficiency or work experience.
 
-## Mejora progresiva del perfil
+## Progressive profile improvement
 
-«Mejorar mi perfil» reúne hasta tres preguntas generales relevantes y sin duplicados, fuera de las tarjetas de ofertas. El usuario puede responderlas u omitirlas. Antes de guardar una respuesta se muestra la información propuesta y se pide confirmación.
+“Mejorar mi perfil” groups up to three relevant, deduplicated general questions outside vacancy cards. The user may answer or skip them. Before saving an answer, the proposed information is displayed for confirmation.
 
-Las respuestas confirmadas enriquecen el perfil, persisten entre sesiones y pueden revisarse, editarse o eliminarse. No se vuelven a preguntar datos ya respondidos o documentados. Esta persistencia es **información guardada del usuario, no entrenamiento del modelo**.
+Confirmed answers enrich the profile, persist between sessions and can be reviewed, edited or removed. Already answered or documented information should not be requested again. This persistence is **stored user information, not model training**.
 
-Las dudas sobre el usuario se separan de las relativas a una oferta, como salario, requisitos no documentados o actividad de la vacante. Estas últimas permanecen en la oferta correspondiente.
+Questions about the user are separated from vacancy-specific uncertainties, such as undocumented salary, requirements or whether the vacancy remains active. Vacancy questions stay in the corresponding card.
 
-«Actualizar recomendaciones» llama al modelo para reevaluar ofertas existentes con el perfil actualizado, reutilizando las descripciones locales y **sin repetir la búsqueda web ni la extracción con Tavily**. Algunos resultados antiguos solo conservan fragmentos verificados: la reevaluación queda limitada a esa evidencia y no completa lo que falta con suposiciones. El flujo completo sigue pendiente de validación de extremo a extremo.
+“Actualizar recomendaciones” calls the model to reevaluate existing vacancies using the updated profile and locally stored descriptions, **without another web search or Tavily extraction**. Some legacy results retain only verified excerpts: reevaluation is limited to that evidence and does not fill gaps with assumptions. The complete flow remains pending end-to-end validation.
 
-## Búsqueda y recomendaciones
+## Search and recommendations
 
-«Buscar ofertas» es el único inicio de una nueva búsqueda. Basta al menos un dato significativo guardado en la trayectoria o las preferencias; no se exige un puesto objetivo. Los contactos, valores predeterminados, entradas vacías y selectores sin elección explícita no son suficientes. Un perfil parcial permite buscar sin inventar criterios ausentes.
+“Buscar ofertas” is the only trigger for a new search. At least one meaningful saved item in career history or search preferences is sufficient; a target role is not mandatory. Contact details, defaults, empty entries and selectors without an explicit choice are insufficient. Partial profiles can search without inventing missing criteria.
 
-El agente carga `instrucciones_agente.md`, utiliza tool calling y limita cada búsqueda a **diez llamadas a herramientas de búsqueda y extracción**. Prioriza las publicaciones originales de empresas o sus sistemas de empleo; los portales sirven para descubrir ofertas. No se evalúan únicamente títulos ni fragmentos del buscador: se requiere una descripción recuperada con responsabilidades y requisitos. Se descartan páginas sin evidencia suficiente, se evitan duplicados y no se inventan resultados para completar cinco.
+The agent loads `agent_instructions.md`, uses tool calling and limits each search to **ten search/extraction tool calls**. It prioritizes original company publications or their recruitment systems; job boards help discover vacancies. Evaluation requires a retrieved description with responsibilities and requirements, rather than only titles or search snippets. Pages without sufficient evidence are discarded, duplicates removed, and results never invented to reach five.
 
-La interfaz no muestra una nota de fit del 1 al 10 ni una etiqueta global de encaje. Mantiene una ordenación calculada en Python según las preferencias y las dimensiones evaluadas por el modelo con evidencia: relevancia del puesto, capacidades, experiencia, idiomas, ubicación, modalidad y salario.
+The interface does not show a 1–10 fit score or a global suitability label. Python retains preference-based ordering using dimensions evaluated by the model with evidence: role relevance, skills, experience, languages, location, work arrangement and salary.
 
-Cada oferta presenta empresa, puesto, ubicación, enlace y explicaciones de:
+Each vacancy shows company, role, location, URL and explanations of:
 
-- Motivos de interés, separados de la cualificación.
-- Requisitos que cumple y coincidencias parciales.
-- Gaps confirmados.
-- Información pendiente de confirmar sobre la oferta.
+- Reasons for interest, separate from qualifications.
+- Requirements met and partial matches.
+- Confirmed gaps.
+- Vacancy information still needing confirmation.
 
-Las evidencias pueden consultarse en «Ver detalles». Declarar una skill no confirma dominio ni experiencia laboral. «¿Qué buscas?» orienta el interés, sin convertirse en capacidades confirmadas. La ausencia de información no se trata como incumplimiento: se señala como «No documentado» o mediante una pregunta concreta. Si no se confirma que la vacante sigue activa, se indica.
+Evidence is available under “Ver detalles”. Declaring a skill does not confirm proficiency or professional experience. “¿Qué buscas?” guides interest without becoming confirmed capability. Missing information is not a failure: it appears as “No documentado” or a specific question. If vacancy activity cannot be confirmed, that uncertainty is stated.
 
-Las preferencias ordenan oportunidades; no son filtros excluyentes automáticos. Ya no hay condiciones imprescindibles en la interfaz ni en el flujo de evaluación. No se comparan salarios de monedas distintas sin conversión fiable ni se deduce un salario anual si faltan datos.
+Preferences prioritize opportunities rather than automatically excluding them. Mandatory conditions and additional filters are no longer part of the interface or evaluation flow. Salaries in different currencies are not compared without reliable conversion, and annual pay is not inferred when necessary information is missing.
 
-## CV base complementario
+## Complementary base CV
 
-«Generar CV base» prepara un borrador en PDF desde los datos personales y la trayectoria confirmada, para revisarlo mediante la vista previa y descargarlo. Actualmente no hay un borrador de texto editable en la interfaz: para corregir los datos se edita el perfil y se vuelve a generar el PDF.
+“Generar CV base” prepares a PDF draft from personal details and confirmed career history for preview and download. There is currently no editable text draft in the interface: corrections require editing the profile and regenerating the PDF.
 
-No incorpora salario, ubicaciones, modalidad ni condiciones de búsqueda, ni inventa logros, fechas, títulos o niveles de dominio. La descripción inicial puede recoger fragmentos de intereses profesionales de «¿Qué buscas?», identificados como aspiraciones y nunca como experiencia adquirida. Esta es la única utilización de ese campo en el CV base.
+It excludes salary, locations, work arrangements and search conditions, and never invents achievements, dates, titles or proficiency levels. The initial description may include professional-interest excerpts from “¿Qué buscas?”, identified as aspirations rather than acquired experience. This is the only use of that field in the base CV.
 
-Se requieren nombre y apellidos, email con formato válido y al menos una experiencia, formación o proyecto completo. Un proyecto completo exige nombre, descripción y contribución personal. Teléfono y enlaces son opcionales. Las entradas incompletas se conservan en el perfil, pero se omiten del CV. El bloqueo del CV no impide buscar ofertas.
+Generation requires first name and surname, a valid email and at least one complete experience, education or project entry. A complete project requires a name, description and personal contribution. Phone and links are optional. Incomplete entries remain in the profile but are omitted from the CV. A blocked CV does not prevent vacancy search.
 
-El PDF se genera localmente en memoria. No se adapta todavía a una oferta y no sustituye al próximo desarrollo de CV personalizado. Las plantillas visuales quedan pospuestas.
+The PDF is generated locally in memory. It is not yet adapted to a vacancy and does not replace future personalized CV development. Visual templates are deferred.
 
-## Próximas funcionalidades por programar
+## Next features to implement
 
-En este orden:
+In this order:
 
-1. **CV personalizado:** botón «Generar CV» en cada oferta. Preparar un PDF adaptado exclusivamente desde información confirmada, sin inventar experiencia, skills, fechas ni logros; permitir revisión y descarga.
-2. **He aplicado:** registrar oferta, enlace, fecha y estado de una candidatura realizada por el usuario. Asociar la versión exacta del CV enviado; si hay varias, el usuario elige cuál utilizó. Permitir un CV externo o registrar sin CV. **No envía candidaturas.**
-3. **Tracker:** consultar y actualizar estados, notas y próximos pasos. Conservar el CV histórico asociado sin alterarlo cuando cambie el perfil.
+1. **Personalized CV:** a “Generar CV” button per vacancy. Generate an adapted PDF solely from confirmed information, without inventing experience, skills, dates or achievements; support review and download.
+2. **He aplicado:** record the vacancy, URL, date and application status after the user applies. Associate the exact CV version sent; when multiple versions exist, the user chooses. Allow an external CV or registration without a CV. **This does not submit applications.**
+3. **Tracker:** view and update statuses, notes and next steps. Preserve the associated historical CV when the profile changes.
 
-## Etapas posteriores
+## Later stages
 
-- Base de datos y cuentas de múltiples usuarios, con almacenamiento y acceso adecuados a los datos personales.
-- Búsqueda diaria de nuevas ofertas.
-- Plantillas visuales de CV.
-- Envío de candidaturas desde la aplicación. Cualquier envío, incluido uno automatizado, requerirá aprobación explícita del usuario para esa candidatura, tras revisar la oferta y el contenido que se enviará. El prototipo actual no envía candidaturas ni contacta con empresas.
+- A database and multi-user accounts with appropriate personal-data storage and access.
+- Daily searches for new vacancies.
+- Visual CV templates.
+- Application submission from the app. Every submission, including automated submissions, requires explicit user approval for that application after reviewing the vacancy and outgoing content. The current prototype neither submits applications nor contacts companies.
 
-## Ejecutar la interfaz local
+## Run the local interface
 
-Con las dependencias de `requirements.txt` instaladas en `.venv`, desde la carpeta del repositorio:
+With `requirements.txt` dependencies installed in `.venv`, run from the repository directory:
 
 ```bash
 .venv/bin/python -m streamlit run app.py --server.address 127.0.0.1 --browser.gatherUsageStats false
 ```
 
-Abre la dirección local que muestra la terminal, habitualmente `http://127.0.0.1:8501`.
+Open the local URL printed by the terminal, usually `http://127.0.0.1:8501`.
 
-Las claves `OPENAI_API_KEY` y `TAVILY_API_KEY` se configuran manualmente en `.env`. `OPENAI_MODEL` permite cambiar el modelo predeterminado `gpt-6-luna`. Las búsquedas y propuestas de skills utilizan servicios externos; la reevaluación utiliza OpenAI con la evidencia guardada. La generación del CV base es local.
+Set `OPENAI_API_KEY` and `TAVILY_API_KEY` manually in `.env`. `OPENAI_MODEL` overrides the default `gpt-6-luna`. Searches and skill suggestions use external services; reevaluation uses OpenAI with stored evidence. Base CV generation is local.
 
-Guarda los datos antes de iniciar una acción. Editar o guardar no llama a servicios externos. El perfil se conserva en `perfil.json`; las evaluaciones, fuentes disponibles y diagnósticos se guardan en `.datos/`, incluyendo `.datos/evaluaciones.json`. Los resultados anteriores no se actualizan automáticamente al cambiar el perfil: hay que reevaluarlos o iniciar una nueva búsqueda.
+Save data before starting an action. Editing and saving do not call external services. Profiles are stored in `user_profile.json`; evaluations, available sources and diagnostics in `.local_data/`, including `.local_data/evaluations.json`. Previous results do not automatically update after profile changes: reevaluate them or start a new search.
 
-## Privacidad y secretos
+### Naming and saved-data compatibility
 
-- No subir a Git claves de API, contraseñas, tokens ni `.env`.
-- No subir perfiles, resultados reales, descripciones y respuestas personales, candidaturas, notas privadas ni CV, incluidos PDFs generados y documentos externos.
-- Mantener `perfil.json`, `.datos/`, `.env`, el entorno virtual y los PDFs fuera de Git mediante `.gitignore`. Revisar también cualquier archivo nuevo antes de incluirlo en un commit.
-- Utilizar únicamente datos ficticios en ejemplos y pruebas del repositorio.
-- La persistencia actual es local en JSON; no implica una cuenta, sincronización ni entrenamiento del modelo. Al buscar o reevaluar se comparte con los servicios configurados la información necesaria para la acción.
+Python modules, functions and variables use English names; interface text remains Spanish. Examples include `user_profile.py`, `profile_ui.py`, `career_history.py`, `agent.py`, `job_search.py` and `evaluation.py`.
 
-El prototipo está orientado a uso personal local. La base de datos, el acceso para múltiples usuarios y el envío de candidaturas se abordarán en etapas posteriores.
+On loading, legacy `perfil.json` and `.datos/` files are moved to their English paths without rewriting their contents. Existing destination files are never overwritten. Legacy JSON field names remain supported through explicit model aliases and the existing profile migration logic, preserving saved information.
+
+## Privacy and secrets
+
+- Never commit API keys, passwords, tokens or `.env`.
+- Never commit profiles, real search results, personal descriptions/answers, applications, private notes or CVs, including generated PDFs and external documents.
+- Keep `user_profile.json`, `.local_data/`, `.env`, the virtual environment and PDFs excluded through `.gitignore`. Legacy private paths remain excluded too. Review new files before committing them.
+- Use fictional data only in repository examples and tests.
+- Current persistence is local JSON storage, not an account, synchronization or model training. Searches and reevaluation share the information necessary for the action with configured services.
+
+The prototype is intended for personal local use. A database, multi-user access and application submission belong to later stages.

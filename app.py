@@ -1,4 +1,4 @@
-"""Interfaz local: streamlit run app.py."""
+"""Local interface: streamlit run app.py."""
 
 import threading
 from datetime import datetime
@@ -6,77 +6,77 @@ from zoneinfo import ZoneInfo
 
 import streamlit as st
 
-from agente import buscar_ofertas, reevaluar_ofertas
-from mejoras import mostrar_mejoras
-from cv import mostrar_cv
-from datos_locales import (ARCHIVO_PERFIL, cargar_evaluaciones, cargar_perfil, contexto_busqueda,
-                          guardar_evaluaciones, huella_contexto)
-from evaluacion import CRITERIOS, normalizar_pesos, ordenar_evaluaciones
-from formulario import iniciar_edicion, mostrar_formulario, mostrar_resumen
-from perfil import migrar_perfil
-from presentacion import explicar_oferta
-from validaciones import informacion_busqueda
+from agent import search_listings, reevaluate_listings
+from profile_improvement import render_profile_improvement
+from cv import render_cv
+from local_storage import (PROFILE_FILE, load_evaluations, load_profile, search_context,
+                          save_evaluations, context_fingerprint)
+from evaluation import CRITERIA, normalize_weights, rank_evaluations
+from profile_ui import start_editing, render_profile_form, render_profile_summary
+from user_profile import migrate_profile
+from presentation import explain_listing
+from validation import has_search_information
 
 st.set_page_config(page_title="Job Agent", page_icon="🔎", layout="wide")
 st.title("Encuentra ofertas que encajen contigo")
 st.caption("Preferencias para ordenar oportunidades, con evidencia y sin filtros excluyentes.")
 
-if "perfil" not in st.session_state:
+if 'profile' not in st.session_state:
     try:
-        st.session_state.perfil = cargar_perfil()
-        st.session_state.guardadas = cargar_evaluaciones()
+        st.session_state.profile = load_profile()
+        st.session_state.saved_results = load_evaluations()
     except (OSError, ValueError):
         st.error("No se pudieron leer los datos locales. No se sobrescribirán los archivos.")
         st.stop()
-    st.session_state.perfil_guardado = ARCHIVO_PERFIL.exists()
-    st.session_state.editando = not st.session_state.perfil_guardado
-    st.session_state.buscando = False
-    st.session_state.busqueda_pendiente = False
-    st.session_state.candado_busqueda = threading.Lock()
-    if st.session_state.editando:
-        iniciar_edicion()
+    st.session_state.profile_saved = PROFILE_FILE.exists()
+    st.session_state.editing = not st.session_state.profile_saved
+    st.session_state.searching = False
+    st.session_state.search_pending = False
+    st.session_state.search_lock = threading.Lock()
+    if st.session_state.editing:
+        start_editing()
 
-# Compatibilidad con una sesión que estuviese abierta antes de esta actualización.
-for clave, valor in (("editando", False), ("buscando", False), ("busqueda_pendiente", False)):
-    if clave not in st.session_state:
-        st.session_state[clave] = valor
-if "candado_busqueda" not in st.session_state:
-    st.session_state.candado_busqueda = threading.Lock()
-if st.session_state.editando and not st.session_state.get("borrador"):
-    iniciar_edicion()
+# Compatibility with sessions opened before this update.
+for key_name, value in (('editing', False), ('searching', False), ('search_pending', False)):
+    if key_name not in st.session_state:
+        st.session_state[key_name] = value
+if 'search_lock' not in st.session_state:
+    st.session_state.search_lock = threading.Lock()
+if st.session_state.editing and not st.session_state.get('draft'):
+    start_editing()
 
-if st.session_state.editando:
-    mostrar_formulario()
+if st.session_state.editing:
+    render_profile_form()
     st.stop()
 
-if not st.session_state.get("perfil_guardado", bool(st.session_state.perfil)):
+if not st.session_state.get('profile_saved', bool(st.session_state.profile)):
     st.info("Todavía no tienes un perfil guardado. Puedes crearlo y completarlo poco a poco.")
-    st.button("Crear perfil", on_click=iniciar_edicion)
+    st.button("Crear perfil", on_click=start_editing)
     st.stop()
 
-perfil = migrar_perfil(st.session_state.perfil)
-mostrar_resumen(perfil, deshabilitar_edicion=st.session_state.busqueda_pendiente or st.session_state.buscando)
-contexto = contexto_busqueda(perfil)
-pesos = normalizar_pesos(perfil)
-guardadas = st.session_state.guardadas
-obsoletas = bool(guardadas and guardadas.get("huella") != huella_contexto(contexto))
-puede_buscar = informacion_busqueda(contexto["perfil"])
+profile = migrate_profile(st.session_state.profile)
+render_profile_summary(profile, disable_editing=st.session_state.search_pending or st.session_state.searching)
+context = search_context(profile)
+weights = normalize_weights(profile)
+saved_results = st.session_state.saved_results
+outdated = bool(saved_results and saved_results.get("huella") != context_fingerprint(context))
+can_search = has_search_information(context["perfil"])
 
-def solicitar_busqueda():
-    if puede_buscar and not st.session_state.buscando and not st.session_state.busqueda_pendiente:
-        st.session_state.busqueda_pendiente = True
+def request_search():
+    if can_search and not st.session_state.searching and not st.session_state.search_pending:
+        st.session_state.search_pending = True
 
 
-iniciar = st.session_state.busqueda_pendiente and not st.session_state.buscando and puede_buscar
-if iniciar:
-    st.session_state.buscando = True
-    st.session_state.busqueda_pendiente = False
-columna_boton, columna_estado = st.columns([1, 4], gap="small")
-with columna_boton:
-    st.button("Buscar ofertas", type="primary", on_click=solicitar_busqueda,
-              disabled=st.session_state.buscando or not puede_buscar)
-with columna_estado:
-    if st.session_state.buscando:
+start = st.session_state.search_pending and not st.session_state.searching and can_search
+if start:
+    st.session_state.searching = True
+    st.session_state.search_pending = False
+button_column, status_column = st.columns([1, 4], gap="small")
+with button_column:
+    st.button("Buscar ofertas", type="primary", on_click=request_search,
+              disabled=st.session_state.searching or not can_search)
+with status_column:
+    if st.session_state.searching:
         st.markdown("""
 <style>
 .estado-busqueda { display: flex; align-items: center; min-height: 2.5rem; }
@@ -92,94 +92,94 @@ with columna_estado:
     <span class="circulo-busqueda" aria-hidden="true"></span>Buscando…
 </div>
 """, unsafe_allow_html=True)
-if not puede_buscar:
+if not can_search:
     st.info("No hay suficiente información para buscar. Añade información sobre tu trayectoria o lo que buscas")
-if not st.session_state.buscando:
-    mostrar_cv(perfil)
+if not st.session_state.searching:
+    render_cv(profile)
 
-if iniciar:
-    candado = st.session_state.candado_busqueda
-    if not candado.acquire(blocking=False):
+if start:
+    lock = st.session_state.search_lock
+    if not lock.acquire(blocking=False):
         st.warning("Ya hay una búsqueda en curso.")
     else:
         try:
             with st.container():
-                resultado = buscar_ofertas(contexto)
-                st.session_state.ultimo_intento = resultado
-                if not resultado["error"]:
+                result = search_listings(context)
+                st.session_state.last_attempt = result
+                if not result["error"]:
                     try:
-                        nuevas = guardar_evaluaciones(contexto, resultado)
+                        new_results = save_evaluations(context, result)
                     except OSError:
-                        nuevas = {"contexto": contexto, "huella": huella_contexto(contexto), **resultado}
-                        st.session_state.aviso_guardado = "Resultados disponibles en sesión, pero no se pudieron guardar en disco."
-                    st.session_state.guardadas = nuevas
+                        new_results = {"contexto": context, "huella": context_fingerprint(context), **result}
+                        st.session_state.save_warning = "Resultados disponibles en sesión, pero no se pudieron guardar en disco."
+                    st.session_state.saved_results = new_results
         finally:
-            st.session_state.buscando = False
-            candado.release()
+            st.session_state.searching = False
+            lock.release()
         st.rerun()
 
-if st.session_state.get("ultimo_intento", {}).get("error"):
+if st.session_state.get('last_attempt', {}).get("error"):
     st.error("El último intento tuvo un error técnico. Se conservan los resultados anteriores, si existen.")
-if st.session_state.get("aviso_guardado"):
-    st.warning(st.session_state.aviso_guardado)
+if st.session_state.get('save_warning'):
+    st.warning(st.session_state.save_warning)
 
 
-def mostrar_oferta(item):
-    oferta = item["oferta"]
+def render_listing(item):
+    listing = item["oferta"]
     with st.container(border=True):
-        st.subheader(f"{oferta.puesto} · {oferta.empresa}")
-        st.text("Ubicación: " + oferta.ubicacion)
-        st.link_button("Ver publicación", oferta.enlace)
-        explicaciones = explicar_oferta(oferta, separar_usuario=True, perfil=perfil)
-        for clave, titulo in (("interes", "Motivos de interés"), ("cumplidos", "Requisitos que cumple"),
+        st.subheader(f"{listing.role} · {listing.company}")
+        st.text("Ubicación: " + listing.location)
+        st.link_button("Ver publicación", listing.url)
+        explanations = explain_listing(listing, separate_user=True, profile=profile)
+        for key_name, title in (("interes", "Motivos de interés"), ("cumplidos", "Requisitos que cumple"),
                               ("parciales", "Coincidencias parciales"), ("gaps", "Gaps"),
                               ("pendientes", "Sobre la oferta · Información pendiente de confirmar")):
-            st.write("**" + titulo + "**")
-            for explicacion in explicaciones[clave]:
-                st.text("• " + explicacion)
-            if not explicaciones[clave]:
-                puesto = next(c for c in oferta.criterios if c.nombre == "puesto")
-                falta_interes = ("Falta una descripción de las funciones para compararlas con tus objetivos."
-                    if not puesto.evidencias_oferta else "Falta concretar qué funciones buscas para relacionarlas con esta oferta."
-                    if not puesto.evidencias_perfil else "La evaluación no ha identificado una coincidencia con tus objetivos o preferencias.")
-                st.caption({"interes": falta_interes,
+            st.write("**" + title + "**")
+            for explanation in explanations[key_name]:
+                st.text("• " + explanation)
+            if not explanations[key_name]:
+                role = next(c for c in listing.criteria if c.name == "puesto")
+                missing_interest = ("Falta una descripción de las funciones para compararlas con tus objetivos."
+                    if not role.listing_evidence_quotes else "Falta concretar qué funciones buscas para relacionarlas con esta oferta."
+                    if not role.profile_evidence_quotes else "La evaluación no ha identificado una coincidencia con tus objetivos o preferencias.")
+                st.caption({"interes": missing_interest,
                             "cumplidos": "Todavía no hay requisitos plenamente acreditados.",
                             "parciales": "No se han identificado coincidencias parciales.",
                             "gaps": "No hay incumplimientos confirmados.",
-                            "pendientes": "No hay preguntas pendientes."}[clave])
+                            "pendientes": "No hay preguntas pendientes."}[key_name])
         with st.expander("Ver detalles"):
-            for criterio in oferta.criterios:
-                st.write("**" + CRITERIOS[criterio.nombre] + "**")
-                st.text("Descripción: " + ("; ".join(criterio.evidencias_oferta) or criterio.evidencia_oferta))
-                st.text("Perfil: " + ("; ".join(criterio.evidencias_perfil) or criterio.evidencia_perfil))
+            for criterion in listing.criteria:
+                st.write("**" + CRITERIA[criterion.name] + "**")
+                st.text("Descripción: " + ("; ".join(criterion.listing_evidence_quotes) or criterion.listing_evidence))
+                st.text("Perfil: " + ("; ".join(criterion.profile_evidence_quotes) or criterion.profile_evidence))
 
-if guardadas:
-    st.subheader("Resultado de Busqueda" if obsoletas else "Resultados de búsqueda")
+if saved_results:
+    st.subheader("Resultado de Busqueda" if outdated else "Resultados de búsqueda")
     try:
-        fecha = datetime.fromisoformat(guardadas["fecha"].replace("Z", "+00:00"))
-        visible = fecha.astimezone(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M (%Z)")
+        date = datetime.fromisoformat(saved_results["fecha"].replace("Z", "+00:00"))
+        visible = date.astimezone(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M (%Z)")
     except (KeyError, TypeError, ValueError):
         visible = "No documentado"
     st.caption(f"Búsqueda: {visible}")
     try:
-        pesos_resultados = normalizar_pesos(guardadas.get("contexto", {}).get("perfil", {}).get("preferencias", {})) if obsoletas else pesos
-        ordenadas = ordenar_evaluaciones(guardadas.get("evaluaciones", []), pesos_resultados)
+        result_weights = normalize_weights(saved_results.get("contexto", {}).get("perfil", {}).get("preferencias", {})) if outdated else weights
+        ranked = rank_evaluations(saved_results.get("evaluaciones", []), result_weights)
     except ValueError:
         st.error("Las evaluaciones anteriores no son compatibles. Hace falta una nueva búsqueda.")
-        ordenadas = []
-    if not ordenadas:
+        ranked = []
+    if not ranked:
         st.info("No hay ofertas evaluables.")
-    for item in ordenadas[:5]:
-        mostrar_oferta(item)
-    mostrar_mejoras([item["oferta"] for item in ordenadas[:5]], perfil)
-    if st.session_state.get("perfil_enriquecido") or obsoletas:
-        if st.button("Actualizar recomendaciones", disabled=st.session_state.buscando):
+    for item in ranked[:5]:
+        render_listing(item)
+    render_profile_improvement([item["oferta"] for item in ranked[:5]], profile)
+    if st.session_state.get('profile_enriched') or outdated:
+        if st.button("Actualizar recomendaciones", disabled=st.session_state.searching):
             try:
                 with st.spinner("Actualizando recomendaciones…"):
-                    resultado = reevaluar_ofertas(contexto, guardadas)
-                    nuevas = guardar_evaluaciones(contexto, resultado)
-                    st.session_state.guardadas = nuevas
-                    st.session_state.perfil_enriquecido = False
+                    result = reevaluate_listings(context, saved_results)
+                    new_results = save_evaluations(context, result)
+                    st.session_state.saved_results = new_results
+                    st.session_state.profile_enriched = False
                 st.rerun()
             except Exception:
                 st.error("No se pudieron actualizar las recomendaciones. Se conservan los resultados anteriores.")

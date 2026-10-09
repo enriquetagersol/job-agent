@@ -1,4 +1,4 @@
-"""CV base de datos guardados, con vista previa y descarga locales."""
+"""Base CV from saved data, with local preview and download."""
 
 from io import BytesIO
 import base64
@@ -17,143 +17,143 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 import streamlit as st
 
-from perfil import migrar_perfil
-from trayectoria import CAMPOS, texto_fecha, titulo_entrada
-from validaciones import faltantes_cv, exigir_cv, entrada_completa
+from user_profile import migrate_profile
+from career_history import ENTRY_FIELDS, format_date, entry_title
+from validation import missing_cv_fields, require_cv_information, entry_is_complete
 
 
-def descripcion_profesional(perfil):
-    """Selecciona fragmentos de aspiraciones; nunca los convierte en cualificación."""
-    texto = perfil.get("que_buscas", "").strip()
-    condiciones = r"salari|sueldo|remot|híbrido|hibrido|presencial|modalidad|ubicaci|jornada|horario|vacacion|contrato|retribuci|\b(?:eur|usd|gbp|chf|euros)\b|[€$£]"
-    ubicaciones = [u["nombre"].strip() for u in perfil.get("ubicaciones", []) if u["nombre"].strip()]
-    partes = re.split(r"[\n.;,]+|\s+(?:con\s+(?:un\s+)?(?:salario|sueldo)|en\s+modalidad)\b", texto, flags=re.I)
-    relevantes = []
-    for parte in partes:
-        parte = parte.strip()
-        if not parte or re.search(condiciones, parte, re.I):
+def professional_description(profile):
+    """Select aspiration excerpts; never turn them into qualifications."""
+    text = profile.get("que_buscas", "").strip()
+    conditions = r"salari|sueldo|remot|híbrido|hibrido|presencial|modalidad|ubicaci|jornada|horario|vacacion|contrato|retribuci|\b(?:eur|usd|gbp|chf|euros)\b|[€$£]"
+    locations = [u["nombre"].strip() for u in profile.get("ubicaciones", []) if u["nombre"].strip()]
+    parts = re.split(r"[\n.;,]+|\s+(?:con\s+(?:un\s+)?(?:salario|sueldo)|en\s+modalidad)\b", text, flags=re.I)
+    relevant = []
+    for part in parts:
+        part = part.strip()
+        if not part or re.search(conditions, part, re.I):
             continue
-        if any(re.search(r"\b" + re.escape(u) + r"\b", parte, re.I) for u in ubicaciones):
+        if any(re.search(r"\b" + re.escape(u) + r"\b", part, re.I) for u in locations):
             continue
-        if re.search(r"busc|interés|interes|gustar|desarroll|aprender|especial|contrib|proyect|trabaj|consult|anal|implement|gesti[oó]n|sector|investig|diseñ|ingenier|program|datos|tecnolog", parte, re.I):
-            relevantes.append(parte)
-    return ". ".join(relevantes)
+        if re.search(r"busc|interés|interes|gustar|desarroll|aprender|especial|contrib|proyect|trabaj|consult|anal|implement|gesti[oó]n|sector|investig|diseñ|ingenier|program|datos|tecnolog", part, re.I):
+            relevant.append(part)
+    return ". ".join(relevant)
 
 
-def borrador_cv(perfil):
-    perfil = migrar_perfil(perfil)
-    lineas = []
-    datos = perfil["datos_cv"]
-    nombre = " ".join(datos.get(c, "").strip() for c in ("nombre", "apellidos") if datos.get(c, "").strip())
-    if nombre:
-        lineas.append(nombre)
-    for campo in ("email", "telefono", "linkedin", "enlaces"):
-        if datos.get(campo, "").strip():
-            lineas.append(datos[campo].strip())
-    descripcion = descripcion_profesional(perfil)
-    if descripcion:
-        lineas.extend(["", "DESCRIPCIÓN", "Intereses profesionales: «" + descripcion + "»"])
-    for campo, titulo in (("experiencias", "EXPERIENCIA LABORAL"), ("formacion", "FORMACIÓN"), ("proyectos", "PROYECTOS")):
-        entradas = []
-        for entrada in perfil[campo]:
-            if not entrada_completa(campo, entrada):
+def compose_cv_text(profile):
+    profile = migrate_profile(profile)
+    lines = []
+    data = profile["datos_cv"]
+    name = " ".join(data.get(c, "").strip() for c in ("nombre", "apellidos") if data.get(c, "").strip())
+    if name:
+        lines.append(name)
+    for field in ("email", "telefono", "linkedin", "enlaces"):
+        if data.get(field, "").strip():
+            lines.append(data[field].strip())
+    description = professional_description(profile)
+    if description:
+        lines.extend(["", "DESCRIPCIÓN", "Intereses profesionales: «" + description + "»"])
+    for field, title in (("experiencias", "EXPERIENCIA LABORAL"), ("formacion", "FORMACIÓN"), ("proyectos", "PROYECTOS")):
+        entries = []
+        for entry in profile[field]:
+            if not entry_is_complete(field, entry):
                 continue
-            nombre_entrada = titulo_entrada(campo, entrada)
-            texto = [nombre_entrada] if nombre_entrada != "Entrada sin completar" else []
-            if campo != "proyectos":
-                fechas = [texto_fecha(entrada.get("inicio", {})),
-                          "Actualidad" if entrada.get("actual") else texto_fecha(entrada.get("fin", {}))]
-                if any(fechas):
-                    texto.append(" - ".join(f for f in fechas if f))
-            for clave in CAMPOS[campo]:
-                if clave in ("empresa", "puesto", "institucion", "estudios", "nombre"):
+            entry_name = entry_title(field, entry)
+            text = [entry_name] if entry_name != "Entrada sin completar" else []
+            if field != "proyectos":
+                dates = [format_date(entry.get("inicio", {})),
+                          "Actualidad" if entry.get("actual") else format_date(entry.get("fin", {}))]
+                if any(dates):
+                    text.append(" - ".join(f for f in dates if f))
+            for key_name in ENTRY_FIELDS[field]:
+                if key_name in ("empresa", "puesto", "institucion", "estudios", "nombre"):
                     continue
-                if entrada.get(clave, "").strip():
-                    texto.append(entrada[clave].strip())
-            if texto:
-                entradas.append("\n".join(texto))
-        if entradas:
-            lineas.extend(["", titulo, "\n\n".join(entradas)])
-    if perfil["skills"]:
-        lineas.extend(["", "SKILLS DECLARADAS", ", ".join(perfil["skills"])])
-    if perfil["idiomas"]:
-        lineas.extend(["", "IDIOMAS", "\n".join(i["idioma"] + (" - " + i["nivel"] if i.get("nivel") else "") for i in perfil["idiomas"])])
-    adicionales = []
-    if perfil["experiencia"] != "Sin especificar":
-        adicionales.append("Experiencia general declarada: " + perfil["experiencia"])
-    antiguo = perfil.get("datos_anteriores", {}).get("experiencia_profesional", "")
-    if antiguo and perfil["experiencia"] == "Sin especificar":
-        adicionales.append(antiguo)
-    for clave, dato in perfil.get("respuestas_confirmadas", {}).items():
-        if clave == "experiencia_tareas" or clave == "idiomas" or clave.startswith(("skill:", "requisito:")):
-            if dato.get("respuesta", "").strip():
-                adicionales.append(dato["respuesta"].strip())
-    if adicionales:
-        lineas.extend(["", "INFORMACIÓN ADICIONAL DECLARADA", "\n".join(adicionales)])
-    return "\n".join(lineas).strip()
+                if entry.get(key_name, "").strip():
+                    text.append(entry[key_name].strip())
+            if text:
+                entries.append("\n".join(text))
+        if entries:
+            lines.extend(["", title, "\n\n".join(entries)])
+    if profile["skills"]:
+        lines.extend(["", "SKILLS DECLARADAS", ", ".join(profile["skills"])])
+    if profile["idiomas"]:
+        lines.extend(["", "IDIOMAS", "\n".join(i["idioma"] + (" - " + i["nivel"] if i.get("nivel") else "") for i in profile["idiomas"])])
+    additional = []
+    if profile["experiencia"] != "Sin especificar":
+        additional.append("Experiencia general declarada: " + profile["experiencia"])
+    legacy = profile.get("datos_anteriores", {}).get("experiencia_profesional", "")
+    if legacy and profile["experiencia"] == "Sin especificar":
+        additional.append(legacy)
+    for key_name, record in profile.get("respuestas_confirmadas", {}).items():
+        if key_name == "experiencia_tareas" or key_name == "idiomas" or key_name.startswith(("skill:", "requisito:")):
+            if record.get("respuesta", "").strip():
+                additional.append(record["respuesta"].strip())
+    if additional:
+        lines.extend(["", "INFORMACIÓN ADICIONAL DECLARADA", "\n".join(additional)])
+    return "\n".join(lines).strip()
 
 
-def generar_pdf(perfil):
-    perfil = migrar_perfil(perfil)
-    exigir_cv(perfil)
-    return _renderizar_pdf(borrador_cv(perfil))
+def generate_pdf(profile):
+    profile = migrate_profile(profile)
+    require_cv_information(profile)
+    return _render_pdf(compose_cv_text(profile))
 
 
-def _renderizar_pdf(texto):
-    if not texto.strip():
+def _render_pdf(text):
+    if not text.strip():
         raise ValueError("Añade información confirmada antes de generar el CV.")
     if "CVVera" not in pdfmetrics.getRegisteredFontNames():
         pdfmetrics.registerFont(TTFont("CVVera", str(Path(reportlab.__file__).parent / "fonts" / "Vera.ttf")))
         pdfmetrics.registerFont(TTFont("CVVeraBold", str(Path(reportlab.__file__).parent / "fonts" / "VeraBd.ttf")))
-    normal = ParagraphStyle("CV", fontName="CVVera", fontSize=10, leading=15,
+    normalized = ParagraphStyle("CV", fontName="CVVera", fontSize=10, leading=15,
                             spaceAfter=5, textColor=colors.HexColor("#263445"), splitLongWords=True)
-    encabezado = ParagraphStyle("Seccion", parent=normal, fontName="CVVeraBold", fontSize=12, leading=17,
+    heading = ParagraphStyle("Seccion", parent=normalized, fontName="CVVeraBold", fontSize=12, leading=17,
                                spaceBefore=12, spaceAfter=8, keepWithNext=True)
-    flujo = []
-    for linea in texto.splitlines():
-        if not linea.strip():
-            flujo.append(Spacer(1, 5))
+    flow = []
+    for line in text.splitlines():
+        if not line.strip():
+            flow.append(Spacer(1, 5))
             continue
-        estilo = encabezado if linea.strip().isupper() and len(linea) < 55 else normal
-        flujo.append(Paragraph(escape(linea), estilo))
+        style = heading if line.strip().isupper() and len(line) < 55 else normalized
+        flow.append(Paragraph(escape(line), style))
     buffer = BytesIO()
-    documento = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=48, rightMargin=48,
+    document = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=48, rightMargin=48,
                                  topMargin=42, bottomMargin=42, title="CV base", author="")
-    documento.build(flujo)
+    document.build(flow)
     return buffer.getvalue()
 
 
-def mostrar_cv(perfil, disabled=False):
-    faltan = faltantes_cv(perfil)
-    huella = hashlib.sha256(json.dumps(perfil, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
-    if st.session_state.get("cv_huella") != huella:
-        st.session_state.pop("cv_pdf", None)
-    if faltan:
+def render_cv(profile, disabled=False):
+    missing_fields = missing_cv_fields(profile)
+    fingerprint = hashlib.sha256(json.dumps(profile, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    if st.session_state.get('cv_huella') != fingerprint:
+        st.session_state.pop('cv_pdf', None)
+    if missing_fields:
         st.caption("Completa los campos obligatorios para generar tu CV")
-        for falta in faltan:
-            st.caption("• " + falta)
-    if st.button("Generar CV base", disabled=disabled or bool(faltan)):
+        for missing in missing_fields:
+            st.caption("• " + missing)
+    if st.button("Generar CV base", disabled=disabled or bool(missing_fields)):
         try:
-            st.session_state.cv_pdf = generar_pdf(perfil)
-            st.session_state.cv_huella = huella
+            st.session_state.cv_pdf = generate_pdf(profile)
+            st.session_state.cv_huella = fingerprint
         except ValueError as error:
             st.error(str(error))
             return
-        st.session_state.pop("cv_borrador", None)
-        st.session_state.pop("cv_texto", None)
+        st.session_state.pop('cv_borrador', None)
+        st.session_state.pop('cv_texto', None)
         st.session_state.cv_preview = True
-    if "cv_pdf" in st.session_state:
+    if 'cv_pdf' in st.session_state:
         pdf = st.session_state.cv_pdf
         if pdf:
-            previa, descarga = st.columns(2)
-            if previa.button("Ver vista previa" if not st.session_state.get("cv_preview") else "Ocultar vista previa", disabled=disabled):
-                st.session_state.cv_preview = not st.session_state.get("cv_preview", False)
+            preview, download = st.columns(2)
+            if preview.button("Ver vista previa" if not st.session_state.get('cv_preview') else "Ocultar vista previa", disabled=disabled):
+                st.session_state.cv_preview = not st.session_state.get('cv_preview', False)
                 st.rerun()
-            descarga.download_button("Descargar CV base en PDF", data=pdf,
+            download.download_button("Descargar CV base en PDF", data=pdf,
                 file_name="cv_base.pdf", mime="application/pdf", disabled=disabled)
-            if st.session_state.get("cv_preview"):
-                contenido = base64.b64encode(pdf).decode("ascii")
-                st.markdown(f'<iframe title="Vista previa del CV" src="data:application/pdf;base64,{contenido}" '
+            if st.session_state.get('cv_preview'):
+                content = base64.b64encode(pdf).decode("ascii")
+                st.markdown(f'<iframe title="Vista previa del CV" src="data:application/pdf;base64,{content}" '
                     'style="width:100%;height:700px;border:0"></iframe>', unsafe_allow_html=True)
         else:
             st.info("Completa tus datos personales o tu trayectoria para crear el CV.")
