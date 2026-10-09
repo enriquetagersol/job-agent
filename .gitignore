@@ -1,1 +1,7 @@
 /perfil.json
+/.env
+/.venv/
+__pycache__/
+/.datos/
+/perfil.tmp
+*.pdf
