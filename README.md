@@ -128,7 +128,7 @@ The provisional deterministic rule is:
 - Only the explicit option “Este criterio pesa más para mí” counts. “Esta opción no me interesa”, missing reasons, other reasons and free-text comments do not create global-priority evidence.
 - Each signal is used once. Already used signals and repeated undo/discard cycles do not produce fresh evidence. No automatic decreases occur. An unspecified declared importance uses the existing Media default.
 - A new adjustment or a manual edit starts a fresh evidence period for that criterion. Individual preference saves override learned adjustments even if the declared importance is unchanged; full-profile saves reset only preference groups that changed. Unrelated profile edits preserve learned priorities.
-- The default threshold is `SIGNAL_THRESHOLD = 3` in `offer_feedback.py`; it initializes the persisted `threshold` setting. Changing the setting in an existing private feedback file affects later actions only. It must be a positive integer. This is a provisional rule, not statistical inference or model training.
+- The default threshold is `SIGNAL_THRESHOLD = 3` in `memory/offer_feedback.py`; it initializes the persisted `threshold` setting. Changing the setting in an existing private feedback file affects later actions only. It must be a positive integer. This is a provisional rule, not statistical inference or model training.
 
 After an adjustment, a brief dismissible notice offers “Deshacer”. Current priorities appear in the normal preference summaries and editors; manual edits override previous adjustments. Dismissing a notice persists without undoing the adjustment. Memory, separate declared/effective priorities and audit history remain internal; no permanent learning panel or technical labels are shown. Unrelated full-profile edits preserve adjusted priorities.
 
@@ -187,7 +187,7 @@ Save data before starting an action. Editing and saving do not call external ser
 
 ### Naming and saved-data compatibility
 
-Python modules, functions and variables use English names; interface text remains Spanish. Examples include `user_profile.py`, `profile_ui.py`, `career_history.py`, `agent.py`, `job_search.py` and `evaluation.py`.
+Python modules, functions and variables use English names; interface text remains Spanish. Examples include `profiles/user_profile.py`, `profiles/profile_ui.py`, `profiles/career_history.py`, `jobs/agent.py`, `jobs/job_search.py` and `jobs/evaluation.py`.
 
 On loading, legacy `perfil.json` and `.datos/` files are moved to their English paths without rewriting their contents. Existing destination files are never overwritten. Legacy JSON field names remain supported through explicit model aliases and the existing profile migration logic, preserving saved information.
 
@@ -222,3 +222,23 @@ Offline tests cover message-before-call ordering, exactly-once submission, persi
 A “Guardadas y descartadas” tab contains separate “Guardadas” and “Descartadas” lists. Each entry shows only its clickable job title. Clicking opens a native Streamlit dialog with the same recommendation summary, evidence and save/discard controls as the search cards. The dialog has a top-right close cross and opening/closing uses local evaluations without API calls. Saved offers are bookmarks, not submitted applications.
 
 The “Me interesa” action and its list have been removed from the interface. Existing interest flags/history remain in private feedback storage for compatibility; no old data is deleted. Saving, discarding, reasons, undo and adaptive priorities continue to work. No application submission or tracker functionality is added.
+
+## Project structure and file responsibilities
+
+`app.py` remains the Streamlit entry point; `main.py` remains the command-line entry point. `run_tests.py` runs packaged tests with network blocked and diagnostic writes isolated from actual user data. Development conventions and coordination rules are in [AGENTS.md](AGENTS.md), separate from runtime assistant instructions.
+
+| Package | Files and responsibilities |
+| --- | --- |
+| `profiles/` | `user_profile.py`: normalization, migration and model payloads; `profile_ui.py`: summaries and editors; `career_history.py`: career/contact entries; `skill_store.py`: confirmed skill sources and decisions; `skills.py`: explicit proposals and acceptance; `profile_improvement.py`: user questions and confirmed answers. |
+| `jobs/` | `agent.py`: retrieval/evaluation orchestration; `job_search.py`: Tavily tools and limits; `job_listings.py`: CLI listing checks; `evaluation.py`: schemas, evidence validation and ranking; `presentation.py`: explanations and private vacancy topics. |
+| `chat/` | `conversational_agent.py`: conversational model/tool loop; `chat_ui.py`: floating panel, message submission and integration with search/preferences. |
+| `memory/` | `offer_feedback.py`: stored offer actions and adaptive priorities; `feedback_ui.py`: their controls/notices; `directed_chat.py`: company interests and temporary search scope; `conversational_memory.py`: lasting conversational preference notes. |
+| `resumes/` | `cv.py`: confirmed base CV content, in-memory PDF preview/download. |
+| `shared/` | `paths.py`: stable project root; `local_storage.py`: private JSON and legacy migration; `validation.py`: required-data rules; `wire_models.py`: compatible JSON aliases; `diagnostics.py`: sanitized technical records. |
+| `tests/` | Offline profile/career/skills, search/evaluation, conversation, memory/feedback, storage migration and readiness-validation regressions, plus simulated Streamlit fixtures. |
+
+Every own Python module has a responsibility docstring. Package `__init__.py` files identify packages; they perform no initialization of user data or external services. New files belong directly in their feature package; shared helpers belong in `shared/`.
+
+Private files remain at the project root (`user_profile.json`, `.env`, `.local_data/`) and remain ignored by Git. `shared.paths.PROJECT_ROOT` anchors paths regardless of where a feature module lives. No stored JSON format or runtime interface design is changed by this reorganization. `agent_instructions.md` remains at the root and is read into search/evaluation/CLI model instructions; chat and skill prompts retain their separate implemented responsibilities.
+
+Execution commands above remain unchanged. For subsequent development chats, name the feature folder and intended files, ask for reuse of shared modules, and follow `AGENTS.md` coordination rules when another chat is editing this checkout. Base CV work belongs in `resumes/`; offer integration belongs in `jobs/` and entry-point coordination in `app.py`.

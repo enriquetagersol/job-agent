@@ -63,3 +63,7 @@ Offline interface checks cover the shared manual/chat company list, normalized d
 Simulated Responses API messages cover natural-language interest, typo correction, company add/remove, contextual affirmation with a temporary Madrid restriction, read-only comparisons and ambiguity, strict arguments, unsupported actions, tool failures, duplicate suppression, undo and no model calls on opening. These tests supply the model decision: they validate Python integration, not real LLM comprehension or factual reliability.
 
 Manual checks with real services remain pending: express company interest using varied phrasing, accept the offered search with a temporary location, verify the global profile is unchanged, compare retrieved cards, request removal or use undo, and test ambiguous references. Failed tools must not be reported as successful. Ordinary conversation may use OpenAI but must not start Tavily without a requested search. Verify search completion in main cards, and confirm no API calls from opening/closing alone.
+
+## Feature packages
+
+Tests now live in `tests/` and import feature packages. Run `.venv/bin/python run_tests.py` from the root; its discovery uses the root as the package base and blocks network access. Test diagnostics are isolated in a temporary directory so simulations do not replace actual user records. Entry points and private-data locations are unchanged.

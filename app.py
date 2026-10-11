@@ -1,4 +1,4 @@
-"""Local interface: streamlit run app.py."""
+"""Compose the Streamlit interface from feature packages. Coordinate profile views, chat, searches, feedback, offer dialogs and base CV actions without changing their persistence contracts."""
 
 import threading
 import copy
@@ -7,19 +7,19 @@ from zoneinfo import ZoneInfo
 
 import streamlit as st
 
-from agent import search_listings, reevaluate_listings
-from profile_improvement import render_profile_improvement
-from cv import render_cv
-from local_storage import (PROFILE_FILE, load_evaluations, load_profile, search_context,
+from jobs.agent import search_listings, reevaluate_listings
+from profiles.profile_improvement import render_profile_improvement
+from resumes.cv import render_cv
+from shared.local_storage import (PROFILE_FILE, load_evaluations, load_profile, search_context,
                           save_evaluations, context_fingerprint)
-from evaluation import CRITERIA, normalize_weights, rank_evaluations
-from profile_ui import start_editing, render_profile_form, render_profile_summary
-from user_profile import migrate_profile
-from presentation import explain_listing
-from validation import has_search_information
-from offer_feedback import load_feedback, effective_profile, available_batch, vacancy_id
-from feedback_ui import render_offer_actions, render_learning
-from chat_ui import render_chat
+from jobs.evaluation import CRITERIA, normalize_weights, rank_evaluations
+from profiles.profile_ui import start_editing, render_profile_form, render_profile_summary
+from profiles.user_profile import migrate_profile
+from jobs.presentation import explain_listing
+from shared.validation import has_search_information
+from memory.offer_feedback import load_feedback, effective_profile, available_batch, vacancy_id
+from memory.feedback_ui import render_offer_actions, render_learning
+from chat.chat_ui import render_chat
 
 st.set_page_config(page_title="Job Agent", page_icon="🔎", layout="wide")
 st.title("Encuentra ofertas que encajen contigo")

@@ -1,13 +1,16 @@
+"""Provide the existing command-line profile and recommendation workflow. Load root-level private data and agent instructions, and invoke the configured model only for requested guidance."""
+
 import json
 import os
 import sys
 from pathlib import Path
 
-from job_listings import filter_listings
-from local_storage import migrate_legacy_files
+from jobs.job_listings import filter_listings
+from shared.local_storage import migrate_legacy_files
+from shared.paths import PROJECT_ROOT
 
 
-profile_file = Path(__file__).parent / 'user_profile.json'
+profile_file = PROJECT_ROOT / 'user_profile.json'
 migrate_legacy_files(profile_file.parent)
 
 
@@ -17,7 +20,7 @@ def recommend_roles(job_listings=None):
 
     try:
         agent_instructions = (
-            Path(__file__).parent / 'agent_instructions.md'
+            PROJECT_ROOT / 'agent_instructions.md'
         ).read_text(encoding="utf-8")
         if not agent_instructions.strip():
             raise ValueError("Instrucciones vacías")
@@ -25,7 +28,7 @@ def recommend_roles(job_listings=None):
         print("No se pudieron cargar las instrucciones del agente. No se llamará a la API.")
         return 1
 
-    load_dotenv(Path(__file__).parent / ".env")
+    load_dotenv(PROJECT_ROOT / ".env")
     if not os.getenv("OPENAI_API_KEY", "").strip():
         print("Falta OPENAI_API_KEY. Configúrala en .env sin compartirla.")
         return 1
@@ -97,7 +100,7 @@ def recommend_roles(job_listings=None):
 
 
 if __name__ == "__main__" and any(flag in sys.argv for flag in ("--search", "--buscar")):
-    from job_search import run_search
+    from jobs.job_search import run_search
     sys.exit(run_search())
 
 if __name__ == "__main__" and any(flag in sys.argv for flag in ("--recommend", "--recomendar")):
