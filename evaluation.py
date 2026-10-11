@@ -142,6 +142,9 @@ def validate_criteria(listing, profile, text):
                 "compatibilidad": c.compatibility, "evidencia_perfil": c.profile_evidence,
                 "evidencia_oferta": c.listing_evidence}, ensure_ascii=False)
         origin = confirmed if c.name in ("capacidades", "experiencia", "idiomas") else preferences
+        if c.name == "puesto":
+            origin = {"preferences": preferences, "career": {
+                field: confirmed.get(field, []) for field in ("experiencias", "formacion", "proyectos")}}
         if c.name == "capacidades":
             # Course and job titles do not establish specific skills.
             origin = {"skills": confirmed.get("skills", []), "aclaraciones": confirmed.get("aclaraciones", {}),
@@ -158,10 +161,14 @@ def validate_criteria(listing, profile, text):
             match = next((p for p in preferences.get("puestos_objetivo", [])
                 if quote_is_documented(p, listing.role) or quote_is_documented(listing.role, p)), None)
             if match and quote_is_documented(listing.role, text):
+                task_grounded = any(quote != listing.role and quote_is_documented(quote, listing.documented_responsibility)
+                                    for quote in c.listing_evidence_quotes)
                 c.points, c.compatibility = 2, "Compatible"
-                c.profile_evidence_quotes = [match]
-                c.listing_evidence_quotes = [listing.role]
-                c.reason = f"El puesto de {listing.role} coincide con tu objetivo de {match}. Esta coincidencia expresa interés; los requisitos se valoran por separado."
+                preserve_reason = task_grounded and bool(c.profile_evidence_quotes) and bool(c.reason.strip())
+                c.profile_evidence_quotes = list(dict.fromkeys([match, *c.profile_evidence_quotes]))
+                c.listing_evidence_quotes = list(dict.fromkeys([listing.role, *c.listing_evidence_quotes]))
+                if not preserve_reason:
+                    c.reason = f"Buscas puestos de {match}; el título de esta oferta coincide. Falta concretar cómo sus funciones conectan con lo que quieres hacer."
                 continue
         if c.name == "salario":
             score_salary(c, listing.documented_salary, preferences, text)

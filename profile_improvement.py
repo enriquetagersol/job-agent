@@ -16,6 +16,8 @@ def is_user_question(c, profile):
         return False
     if c.name in ("experiencia", "capacidades"):
         return True
+    if c.name == "puesto":
+        return not c.profile_evidence_quotes and not profile.get("que_buscas", "").strip()
     if c.name == "idiomas":
         return not c.profile_evidence_quotes and c.profile_evidence.strip() in ("", "No documentado", "Sin datos")
     return False
@@ -28,6 +30,8 @@ def user_questions(job_listings, profile):
             questions = []
             if not is_user_question(c, profile):
                 continue
+            if c.name == "puesto":
+                questions.append(("work_interests", "¿Qué tareas te gustaría realizar en tu próximo puesto? Describe qué trabajo buscas, además del título."))
             if c.name == "experiencia":
                 recorded = [e.get(k, "") for field, keys in (
                     ("experiencias", ("responsabilidades", "logros")),

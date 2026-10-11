@@ -22,6 +22,14 @@ def start_editing(block=None, entry=None):
         if key_name.startswith("editor_"):
             del st.session_state[key_name]
     st.session_state.draft = migrate_profile(st.session_state.profile)
+    from offer_feedback import load_feedback, effective_priorities, CRITERION_FIELDS
+    state = load_feedback(PROFILE_FILE.parent / '.local_data' / 'offer_feedback.json', st.session_state.profile)
+    current = effective_priorities(state)
+    for criterion, key in CRITERION_FIELDS.items():
+        if block is None or block == {"location": "ubicaciones", "work_mode": "modalidades", "salary": "salario"}[criterion]:
+            if any(a["active"] and a["criterion"] == criterion for a in state["adjustments"]):
+                st.session_state.draft[key] = current[criterion]
+    st.session_state.priority_editor_initial = {key: st.session_state.draft[key] for key in CRITERION_FIELDS.values()}
     st.session_state.editing = True
     st.session_state.form_error = ""
     st.session_state.active_entry = None
@@ -145,6 +153,8 @@ def render_profile_form():
                 index=optional_index(ids, draft["experiencia_excluida_id"]), key="editor_empresa_elegida")
         st.caption("Empresa para excluir: " + (employer_to_exclude(draft) or "Sin seleccionar"))
         draft["excluir_empresa_actual"] = st.checkbox("Excluir ofertas de esta empresa", value=draft["excluir_empresa_actual"], key="editor_excluir_empresa")
+        render_text_options("conversation_preferences", "Preferencias conversadas", None)
+        render_text_options("companies_of_interest", "Empresas de interés", None)
         render_text_options("puestos_objetivo", "Puestos objetivo/de interés", 5)
         render_text_options("ubicaciones", "Ubicaciones", 5, "nombre", preference=True)
         draft["importancia_ubicacion"] = st.selectbox("Importancia global de la ubicación", PREFERENCES,
@@ -179,12 +189,21 @@ def render_profile_form():
     if save.button("Guardar perfil", type="primary", key="editor_guardar"):
         try:
             # Text entered without clicking Add is neither lost nor added implicitly.
-            if any(st.session_state.get("editor_nuevo_" + c, "").strip() for c in ("puestos_objetivo", "ubicaciones", "skills", "idiomas")):
+            if any(st.session_state.get("editor_nuevo_" + c, "").strip() for c in ("puestos_objetivo", "ubicaciones", "skills", "idiomas", "companies_of_interest", "conversation_preferences")):
                 raise ValueError("Pulsa Añadir para guardar las opciones pendientes o borra su texto.")
             if st.session_state.get('active_entry'):
                 raise ValueError("Guarda o cancela la entrada abierta antes de guardar el perfil.")
             validate_profile(draft, previous=read_json(PROFILE_FILE, {}))
-            save_json(PROFILE_FILE, draft)
+            previous = migrate_profile(read_json(PROFILE_FILE, {}))
+            for key, initial in st.session_state.get("priority_editor_initial", {}).items():
+                if draft[key] == initial:
+                    draft[key] = previous[key]
+            groups = {"location": ("ubicaciones", "importancia_ubicacion"),
+                      "work_mode": ("modalidades", "importancia_modalidad"),
+                      "salary": ("salario_minimo", "moneda", "importancia_salario")}
+            edited_priorities = tuple(c for c, fields in groups.items()
+                                      if any(draft.get(f) != previous.get(f) for f in fields))
+            save_json(PROFILE_FILE, draft, manual_priorities=edited_priorities)
             st.session_state.profile = copy.deepcopy(draft)
             st.session_state.editing = False
             st.session_state.profile_saved = True
@@ -278,7 +297,8 @@ def render_block_editor():
                 for key_name in keys:
                     updated[key_name] = copy.deepcopy(draft.get(key_name, {} if key_name != "skills_rechazadas" else []))
             validate_profile(updated, previous=read_json(PROFILE_FILE, {}))
-            save_json(PROFILE_FILE, updated)
+            criterion = {"ubicaciones": "location", "modalidades": "work_mode", "salario": "salary"}.get(field)
+            save_json(PROFILE_FILE, updated, manual_priorities=(criterion,) if criterion else ())
             st.session_state.profile = updated
             close_editor()
         except (ValueError, OSError) as error:
@@ -364,6 +384,9 @@ def render_profile_summary(profile, disable_editing=False):
             render_suggestions(profile)
         render_editable_summary("idiomas", "**Idiomas:** " + ("; ".join(f"{i['idioma']} ({i['nivel'] or 'Sin especificar'})" for i in profile["idiomas"]) or "Sin especificar"), disable_editing)
     with preferences:
+        render_company_preferences(profile, disable_editing)
+        from offer_feedback import load_feedback, effective_profile
+        profile = effective_profile(load_feedback(PROFILE_FILE.parent / ".local_data" / "offer_feedback.json", profile), profile)
         st.write("**Empresa para excluir:** " + (employer_to_exclude(profile) or "Sin seleccionar"))
         st.caption("Excluir ofertas de esta empresa: " + ("Sí" if profile["excluir_empresa_actual"] else "No"))
         render_editable_summary("puestos_objetivo", "**Puestos objetivo:** " + (", ".join(profile["puestos_objetivo"]) or "No especificado"), disable_editing)
@@ -377,3 +400,37 @@ def render_profile_summary(profile, disable_editing=False):
         render_editable_summary("que_buscas", "**¿Qué buscas?**", disable_editing)
         st.text(profile["que_buscas"] or "No especificado")
     st.button("Editar perfil", on_click=start_editing, disabled=disable_editing)
+
+
+def render_company_preferences(profile, disabled=False):
+    from directed_chat import add_company, remove_company
+    if profile.get('conversation_preferences'):
+        st.markdown('**Preferencias conversadas**')
+        for preference in profile['conversation_preferences']:
+            label, action = st.columns([4, 1])
+            label.write(preference)
+            if action.button('Eliminar', key=option_key('remove_conversation_preference', preference), disabled=disabled):
+                from conversational_memory import change_preference
+                updated, _ = change_preference(st.session_state.profile, preference, False)
+                save_json(PROFILE_FILE, updated)
+                st.session_state.profile = updated
+                st.rerun()
+    st.markdown("**Empresas de interés**")
+    left, right = st.columns([4, 1])
+    left.text_input("Añadir empresa", key="company_manual_name", disabled=disabled)
+    if right.button("Añadir", key="company_manual_add", disabled=disabled):
+        try:
+            updated, added = add_company(st.session_state.profile, st.session_state.company_manual_name)
+            save_json(PROFILE_FILE, updated)
+            st.session_state.profile = updated
+            st.rerun()
+        except ValueError as error:
+            st.error(str(error))
+    for company in profile.get("companies_of_interest", []):
+        label, action = st.columns([4, 1])
+        label.write(company)
+        if action.button("Eliminar", key="remove_company_" + company, disabled=disabled):
+            updated = remove_company(st.session_state.profile, company)
+            save_json(PROFILE_FILE, updated)
+            st.session_state.profile = updated
+            st.rerun()

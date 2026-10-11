@@ -20,6 +20,8 @@ PERSONAL_FIELDS = (("nombre", "Nombre"), ("apellidos", "Apellidos"), ("telefono"
 
 
 def ensure_career_defaults(profile):
+    profile.setdefault("companies_of_interest", [])
+    profile.setdefault("conversation_preferences", [])
     for field in ENTRY_FIELDS:
         profile.setdefault(field, [])
     profile.setdefault("datos_cv", {"nombre": "", "email": "", "telefono": "", "enlaces": ""})

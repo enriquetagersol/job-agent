@@ -55,7 +55,11 @@ def has_search_information(profile):
         return True
     if any(meaningful_text(r.get("respuesta")) for r in confirmed.get("aclaraciones", confirmed.get("respuestas_confirmadas", {})).values()):
         return True
-    return (any(meaningful_text(p) for p in preferences.get("puestos_objetivo", [])) or
+    return (any(meaningful_text(p) for p in preferences.get("conversation_preferences", [])) or
+            any(meaningful_text(c) for c in preferences.get("companies_of_interest", [])) or
+            meaningful_text(preferences.get("search_company")) or
+            meaningful_text(preferences.get("search_location")) or
+            any(meaningful_text(p) for p in preferences.get("puestos_objetivo", [])) or
             any(meaningful_text(u.get("nombre")) for u in preferences.get("ubicaciones", [])) or
             any(m in ("Presencial", "Híbrido", "Remoto") and p in (None, "Baja", "Media", "Alta")
                 for m, p in preferences.get("modalidades", {}).items()) or

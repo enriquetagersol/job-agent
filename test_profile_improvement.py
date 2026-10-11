@@ -12,6 +12,34 @@ from evaluation import EvaluationResult
 
 
 class QuestionTests(unittest.TestCase):
+    def test_private_vacancy_topics_persist_and_refresh_without_profile_changes(self):
+        import copy
+        import tempfile
+        from pathlib import Path
+        from local_storage import save_evaluations, read_json
+        profile = migrate_profile({})
+        before = copy.deepcopy(profile)
+        listing = sample_listing()
+        experience = next(c for c in listing.criteria if c.name == "experiencia")
+        experience.points = "Sin datos"
+        salary = next(c for c in listing.criteria if c.name == "salario")
+        salary.points = "Sin datos"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "evaluations.json"
+            with patch("local_storage.EVALUATIONS_FILE", path):
+                data = save_evaluations({"perfil": profile}, {"evaluaciones": [listing.model_dump()]})
+                topics = data["vacancy_follow_up"][listing.url]
+                self.assertIn("salario", topics["unknown_criteria"])
+                self.assertNotIn("experiencia", topics["unknown_criteria"])
+                self.assertTrue(any("salario" in question for question in topics["questions"]))
+                self.assertEqual(read_json(path)["evaluaciones"][0]["criterios"][2]["puntos"], "Sin datos")
+                salary.points = 2
+                salary.compatibility = "Compatible"
+                updated = save_evaluations({"perfil": profile}, {"evaluaciones": [listing.model_dump()]})
+                self.assertNotIn("salario", updated["vacancy_follow_up"][listing.url]["unknown_criteria"])
+                self.assertFalse(any("salario" in q for q in updated["vacancy_follow_up"][listing.url]["questions"]))
+        self.assertEqual(profile, before)
+
     def test_deduplication_limit_and_answered(self):
         listing = sample_listing()
         c = listing.criteria[1]
@@ -85,17 +113,28 @@ class AnswerInterfaceTests(unittest.TestCase):
         data = json.loads(self.file_path.read_text())
         self.assertEqual(data["respuestas_confirmadas"]["skill:python"]["respuesta"], "Hice un ejercicio personal con Python")
         app = self.app()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state.profile, data)
+        self.assertEqual(app.text_area(key="editar_respuesta_skill:python").value,
+                         "Hice un ejercicio personal con Python")
         self.assertFalse(any(t.key == "respuesta_skill:python" for t in app.text_area))
         app.text_area(key="editar_respuesta_skill:python").set_value("Solo un curso introductorio").run()
         app.button(key="cambio_skill:python").click().run()
         self.assertEqual(json.loads(self.file_path.read_text())["respuestas_confirmadas"], data["respuestas_confirmadas"])
         app.button(key="guardar_cambio_skill:python").click().run()
+        app = self.app()
+        self.assertEqual(app.text_area(key="editar_respuesta_skill:python").value,
+                         "Solo un curso introductorio")
+        self.assertFalse(any(t.key == "respuesta_skill:python" for t in app.text_area))
         with patch('agent.reevaluate_listings', return_value=self.search.return_value) as reevaluate:
             self.button(app, "Actualizar recomendaciones").click().run()
             reevaluate.assert_called_once()
         self.assertEqual(self.search.call_count, 1)
         app.button(key="borrar_skill:python").click().run()
         self.assertFalse(json.loads(self.file_path.read_text())["respuestas_confirmadas"])
+        app = self.app()
+        self.assertFalse(app.session_state.profile["respuestas_confirmadas"])
+        self.assertFalse(app.exception)
 
 
 if __name__ == "__main__":

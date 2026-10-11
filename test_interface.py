@@ -328,9 +328,9 @@ class InterfaceTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(len(app.metric), 0)
         text = "\n".join(m.value for m in app.markdown)
-        for section in ("Motivos de interés", "Requisitos que cumple", "Gaps", "Información pendiente de confirmar"):
+        for section in ("Motivos de interés", "Requisitos que cumple", "Gaps"):
             self.assertIn(section, text)
-        for label in ("Fit global", "Encaje profesional", "Fit no calculable"):
+        for label in ("Fit global", "Encaje profesional", "Fit no calculable", "Información pendiente de confirmar", "No hay preguntas pendientes", "¿Sigue abierta esta vacante?"):
             self.assertNotIn(label, text)
         self.assertEqual(self.search.call_count, 1)
 

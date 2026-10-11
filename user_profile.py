@@ -63,6 +63,9 @@ def migrate_profile(previous):
 
 
 def validate_profile(profile, previous=None):
+    companies = []
+    for company in profile.get("companies_of_interest", []):
+        companies = add_option(companies, company)
     for field in ("experiencias", "formacion", "proyectos"):
         ids = set()
         for entry in profile.get(field, []):
@@ -118,6 +121,8 @@ def profile_for_model(profile):
     preferences = {field: copy.deepcopy(profile[field]) for field in
         ("puestos_objetivo", "ubicaciones", "modalidades", "salario_minimo", "moneda",
          "importancia_ubicacion", "importancia_modalidad", "importancia_salario", "que_buscas")}
+    preferences["conversation_preferences"] = copy.deepcopy(profile.get("conversation_preferences", []))
+    preferences["companies_of_interest"] = copy.deepcopy(profile["companies_of_interest"])
     return {"confirmado": confirmed, "preferencias": preferences}
 
 

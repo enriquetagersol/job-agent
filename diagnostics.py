@@ -29,3 +29,23 @@ def save_diagnostics(result):
         save_json(BASE_DIR / '.local_data' / 'diagnostics.json', data)
     except OSError:
         pass
+
+
+def record_chat_event(tool, code, error_type=None):
+    """Record only allowlisted technical metadata, never arguments or exceptions."""
+    from datetime import datetime, timezone
+    from local_storage import read_json
+    tools = {'remember_search_preference', 'forget_search_preference', 'add_company_interest', 'remove_company_interest', 'search_jobs', 'get_recommendations'}
+    codes = {'success', 'action_rejected', 'invalid_arguments', 'persistence_error', 'conversation_error'}
+    errors = {'ValueError', 'ValidationError', 'JSONDecodeError', 'OSError', 'PermissionError',
+              'FileNotFoundError', 'APIError', 'APIConnectionError', 'AuthenticationError',
+              'RateLimitError', 'BadRequestError', 'APITimeoutError'}
+    path = BASE_DIR / '.local_data' / 'chat_diagnostics.json'
+    event = {'date': datetime.now(timezone.utc).isoformat(),
+             'tool': tool if tool in tools else 'other', 'code': code if code in codes else 'other',
+             'error_type': error_type if error_type in errors else None}
+    try:
+        previous = read_json(path, [])
+        save_json(path, [*(previous if isinstance(previous, list) else [])[-49:], event])
+    except (OSError, ValueError):
+        pass

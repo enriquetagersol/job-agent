@@ -40,7 +40,7 @@ def read_json(file_path, default=None):
     return json.loads(file_path.read_text(encoding="utf-8"))
 
 
-def save_json(file_path, content):
+def save_json(file_path, content, manual_priorities=()):
     file_path = Path(file_path)
     if file_path.resolve() == PROFILE_FILE.resolve() and isinstance(content, dict):
         from career_history import validate_entry
@@ -58,6 +58,13 @@ def save_json(file_path, content):
     temporary.write_text(json.dumps(content, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temporary.chmod(0o600)
     temporary.replace(file_path)
+    if file_path.resolve() == PROFILE_FILE.resolve() and isinstance(content, dict):
+        from offer_feedback import load_feedback, sync_manual_priorities
+        feedback_path = PROFILE_FILE.parent / '.local_data' / 'offer_feedback.json'
+        if feedback_path.exists():
+            state = load_feedback(feedback_path, content)
+            if sync_manual_priorities(state, content, manual_priorities):
+                save_json(feedback_path, state)
 
 
 def load_profile():
@@ -92,5 +99,12 @@ def load_evaluations():
 def save_evaluations(context, result):
     data = {"version": DATA_VERSION, "huella": context_fingerprint(context),
              "contexto": context, **result}
+    from evaluation import Recommendation
+    from presentation import vacancy_follow_up
+    profile = context.get("perfil", {})
+    data["vacancy_follow_up"] = {
+        listing.url: vacancy_follow_up(listing, profile)
+        for listing in (Recommendation.model_validate(item) for item in result.get("evaluaciones", []))
+    }
     save_json(EVALUATIONS_FILE, data)
     return data
