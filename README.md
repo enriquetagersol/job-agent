@@ -50,9 +50,9 @@ Dos pestañas:
    **🔍 Buscar ofertas** (descarga ofertas de ~145 empresas y Claude
    analiza hasta 25 nuevas; 5-10 min, ≈ 1-2 $) y **⚙︎ Preferencias** (puestos, dónde, salario; y
    sectores, qué valoras, qué evitas y qué descartas, que escribes con tus palabras y se convierten
-   en etiquetas fijas). Debajo, *Resultados de búsqueda* y *Guardadas*: cada oferta dice **qué
+   en etiquetas fijas). Debajo, *Resultados de búsqueda* y *Te interesa*: cada oferta dice **qué
    harías, por qué encaja y por qué no encaja**; pulsas **👍 Me interesa** o **👎 No me interesa** y
-   una ventana te pregunta el porqué (opcional). *Guardadas* son las que te interesan y aún no has
+   una ventana te pregunta el porqué (opcional). *Te interesa* son las que te interesan y aún no has
    enviado; las que no te interesan desaparecen.
 
 **CV adaptado desde la app:** Claude lee la oferta y adapta tu CV maestro sin inventar nada; en
@@ -76,9 +76,18 @@ Llavero de macOS (no queda en ningún archivo).
 También puedes contarle al agente novedades ("me han llamado de Acme", "me han rechazado en Globex") y
 actualizará la candidatura.
 
+## Arranque automático
+
+Doble clic en **`Arrancar al iniciar sesión.command`** y Job Agent arrancará solo cada vez que inicies sesión
+en el Mac (y se reiniciará si se cierra por un error). Así Slack y la vigilancia del correo funcionan sin abrir
+nada; al despertar el Mac revisa lo que llegó mientras dormía. «Abrir Job Agent.command» sigue sirviendo para
+abrir el dashboard en el navegador. Registro: `~/Library/Logs/JobAgent.log`. Para quitarlo:
+**`Quitar arranque automático.command`**.
+
 ## Hablar con el agente por Slack
 
-Puedes escribirle a **Job Agent** por mensaje directo en Slack (o mencionarlo con `@Job Agent` en un
+Puedes escribirle a **Job Agent** por mensaje directo en Slack (también para que **investigue una oferta que
+hayas visto** por tu cuenta: pásale el enlace, la empresa y el puesto, o pega el texto) (o mencionarlo con `@Job Agent` en un
 canal; responde en hilo). Te cuenta cómo van tus candidaturas, apunta novedades («me han llamado de
 Acme para entrevista el 28»), te enseña ofertas y registra si te interesan, cambia preferencias,
 lanza búsquedas y genera CVs adaptados si se lo pides. Usa la misma API key y los mismos datos que la
@@ -99,13 +108,28 @@ Configuración (una vez, ~5 minutos):
    (En otros sistemas: `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` y `SLACK_USUARIO` en `.env`.)
 5. Cierra y vuelve a abrir Job Agent. En la consola verás «Slack: conectado».
 
-### Que revise tu correo desde Slack
+### Revisión del correo (Gmail)
 
-Escríbele «revisa mi correo» y leerá los correos nuevos de tu etiqueta **JOB SEARCH** de Gmail y
-actualizará tus candidaturas (entrevistas, rechazos, ofertas, peticiones con plazo). Usa la API de
-Gmail con permiso de **solo lectura** (`gmail.readonly`): no puede enviar, borrar ni cambiar nada.
-Comparte con la tarea diaria de las 9:00 la marca de «última revisión» (`datos/correo_estado.json`),
-así que ninguna de las dos repite correos ya revisados.
+Con Gmail conectado y la app abierta, Job Agent **procesa cada correo nuevo al llegar** (mira el buzón cada
+2 minutos con el historial de Gmail, sin coste; Claude solo entra si el correo tiene pinta de empleo). Al abrir la
+app se pone al día con lo que llegó mientras estaba cerrada. También puedes pedírselo por Slack («revisa mi correo»).
+
+- Descarta gratis lo que no tiene pinta de empleo y Claude clasifica el resto: sobre una candidatura,
+  oportunidad de un recruiter, alerta de empleo u otra cosa.
+- Pone la etiqueta **JOB SEARCH** a los correos de empleo y actualiza o crea tus candidaturas con la
+  fecha del correo (también los que envías tú, como un CV a alguien de la empresa).
+- De las **alertas de empleo** (LinkedIn, Indeed…) saca cada puesto y, para no gastar de más, los **acumula y los
+  investiga de 10 en 10** (o antes si alguno lleva 3 días esperando; cada uno cuesta unos 0,10-0,25 $). Cada puesto
+  lo **investiga con búsquedas web**
+  (la web de empleo de la empresa o su ATS; LinkedIn queda bloqueado), lo analiza como una búsqueda y añade
+  a *Ofertas* (marcados como «Nueva») los que encajan.
+- Te avisa al momento por Slack (o con una notificación del Mac si no tienes Slack) de cada actualización de
+  candidatura y de cada oportunidad nueva; de las alertas, **primero investiga los puestos** y solo te avisa
+  de los que encajan. De los correos que envías tú no te avisa (pero sí los apunta).
+
+Permiso de Gmail: `gmail.modify`, pero el código **solo lee y añade la etiqueta JOB SEARCH**: no envía,
+no borra, no archiva ni quita etiquetas. El contenido de los correos se trata como datos, nunca como
+instrucciones, y no copia contraseñas, códigos ni enlaces de acceso.
 
 Conexión (una vez):
 
@@ -147,7 +171,8 @@ app/busqueda_ia.py      búsqueda de ofertas con la API de Claude (botón Buscar
 app/perfil_ia.py        análisis del CV subido con la API de Claude (botón Mi CV)
 app/empresas_ia.py      descripción de la empresa de cada oferta («La empresa»), con búsqueda web
 app/agente_chat.py      agente conversacional con herramientas sobre los datos (lo usa Slack)
-app/gmail_lector.py     lectura de la etiqueta JOB SEARCH con la API de Gmail (solo lectura)
+app/gmail_lector.py     acceso a Gmail (leer y poner la etiqueta JOB SEARCH; nada más)
+app/correo_ia.py        trigger de correo nuevo: clasifica, etiqueta, actualiza candidaturas, analiza alertas y avisa
 app/slack_bot.py        bot de Slack (Socket Mode); slack/manifest.json para crear la app
 perfil/preferencias.json  preferencias editables desde la app (mandan sobre preferencias.md)
 app/static/             interfaz (HTML/CSS/JS, sin build)

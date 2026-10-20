@@ -1,5 +1,7 @@
-"""Lee los correos de la etiqueta «JOB SEARCH» de Gmail con permiso de SOLO LECTURA (gmail.readonly).
-Lo usa el agente de Slack («revisa mi correo»). Nunca envía, borra ni modifica nada.
+"""Acceso a Gmail para Job Agent: lee el buzón y pone la etiqueta «JOB SEARCH» a los correos de empleo.
+
+Permiso gmail.modify, pero este módulo SOLO lee mensajes y añade esa etiqueta: no envía, no borra, no archiva
+ni quita etiquetas (no hay código para ello).
 
 Credenciales (fuera del proyecto): el cliente OAuth de tipo «App de escritorio» y el token de acceso
 se guardan en el Llavero de macOS. Conectar (una vez): «Conectar Gmail.command», o
@@ -28,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import datos  # noqa: E402
 
 ETIQUETA = "JOB SEARCH"
-ALCANCE = "https://www.googleapis.com/auth/gmail.readonly"
+ALCANCE = "https://www.googleapis.com/auth/gmail.modify"
 API = "https://gmail.googleapis.com/gmail/v1/users/me/"
 LLAVERO_CLIENTE = "job-agent-gmail-cliente"
 LLAVERO_TOKEN = "job-agent-gmail-token"
@@ -114,7 +116,7 @@ def autorizar(ruta_cliente):
         "client_id": c["client_id"], "redirect_uri": redir, "response_type": "code", "scope": ALCANCE,
         "access_type": "offline", "prompt": "consent", "state": estado,
         "code_challenge": reto, "code_challenge_method": "S256"})
-    print("Se abrirá el navegador para que autorices a Job Agent a LEER tu Gmail…")
+    print("Se abrirá el navegador para que autorices a Job Agent a leer tu Gmail y etiquetar los correos de empleo…")
     webbrowser.open(url)
     srv.timeout = 300
     while not recibido:
@@ -128,10 +130,10 @@ def autorizar(ruta_cliente):
     if "refresh_token" not in tok:
         raise SystemExit("Google no devolvió un token de larga duración. Vuelve a intentarlo.")
     if ALCANCE not in tok.get("scope", ""):
-        raise SystemExit("No se concedió el permiso de lectura de Gmail.")
+        raise SystemExit("No se concedió el permiso de Gmail que hace falta (leer y etiquetar).")
     _llavero_guardar(LLAVERO_CLIENTE, json.dumps(d))
     _llavero_guardar(LLAVERO_TOKEN, tok["refresh_token"])
-    print("✅ Gmail conectado (solo lectura).")
+    print("✅ Gmail conectado.")
 
 
 def _token():
@@ -184,6 +186,69 @@ def _texto(parte):
     return re.sub(r"[ \t]+", " ", re.sub(r"\n{3,}", "\n\n", t)).strip()[:MAX_TEXTO]
 
 
+def buscar(q, maximo=100):
+    """IDs de mensajes que cumplen la búsqueda de Gmail `q`."""
+    ids, pagina = [], None
+    while len(ids) < maximo:
+        r = _api("messages", q=q, maxResults=min(100, maximo), **({"pageToken": pagina} if pagina else {}))
+        ids += [m["id"] for m in r.get("messages", [])]
+        pagina = r.get("nextPageToken")
+        if not pagina:
+            break
+    return ids[:maximo]
+
+
+def leer(mid):
+    """Un mensaje: cabeceras, etiquetas, fecha y texto."""
+    m = _api(f"messages/{mid}", format="full")
+    cab = {h["name"].lower(): h["value"] for h in m["payload"].get("headers", [])}
+    fecha = _dt.datetime.fromtimestamp(int(m["internalDate"]) / 1000).astimezone()
+    return {"id": mid, "fecha": fecha, "de": cab.get("from", ""), "para": cab.get("to", ""),
+            "asunto": cab.get("subject", ""), "etiquetas": m.get("labelIds", []),
+            "enviado": "SENT" in m.get("labelIds", []), "texto": _texto(m["payload"])}
+
+
+def historial_actual():
+    """Marca del historial de Gmail ahora mismo (para detectar lo que llegue después)."""
+    return _api("profile")["historyId"]
+
+
+def nuevos_desde(history_id):
+    """IDs de mensajes añadidos al buzón desde `history_id` y la marca nueva.
+    Devuelve (None, marca) si la marca es demasiado antigua (Gmail solo guarda ~1 semana)."""
+    ids, pagina, marca = [], None, history_id
+    while True:
+        try:
+            r = _api("history", startHistoryId=history_id, historyTypes="messageAdded",
+                     **({"pageToken": pagina} if pagina else {}))
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None, historial_actual()
+            raise
+        for h in r.get("history", []):
+            ids += [a["message"]["id"] for a in h.get("messagesAdded", [])]
+        marca = r.get("historyId", marca)
+        pagina = r.get("nextPageToken")
+        if not pagina:
+            return list(dict.fromkeys(ids)), marca
+
+
+def etiqueta_id(nombre=ETIQUETA):
+    e = next((l for l in _api("labels")["labels"] if l["name"].lower() == nombre.lower()), None)
+    if e is None:
+        raise RuntimeError(f"No encuentro la etiqueta «{nombre}» en Gmail.")
+    return e["id"]
+
+
+def etiquetar(mid, label_id):
+    """Añade la etiqueta al mensaje. Es la ÚNICA escritura que hace Job Agent en Gmail."""
+    req = urllib.request.Request(API + f"messages/{mid}/modify", method="POST",
+                                 data=json.dumps({"addLabelIds": [label_id]}).encode(),
+                                 headers={"Authorization": f"Bearer {_token()}", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, context=_ssl(), timeout=30) as r:
+        r.read()
+
+
 def ultima_revision():
     return datos._leer(F_CORREO, {}).get("ultima_revision")
 
@@ -229,9 +294,13 @@ if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "--autorizar":
         autorizar(sys.argv[2])
     elif sys.argv[1:] == ["--probar"]:
-        cs, desde = correos(maximo=10)
-        print(f"{len(cs)} correo(s) en «{ETIQUETA}» desde {desde}:")
-        for c in cs:
-            print(f"  {c['fecha']} · {c['asunto'][:70]}")
+        ids = buscar("newer_than:2d -in:spam -in:trash -in:drafts", 10)
+        print(f"Conexión correcta. Job Agent vigilará toda tu bandeja de entrada (no solo «{ETIQUETA}»).")
+        print(f"Últimos correos que ve (2 días): {len(ids)}")
+        for i in ids[:5]:
+            m = leer(i)
+            print(f"  {m['fecha']:%d/%m %H:%M} · {m['asunto'][:70]}")
+        etiqueta_id()
+        print(f"La etiqueta «{ETIQUETA}» existe: ahí guardará los correos de empleo.")
     else:
         print(__doc__)

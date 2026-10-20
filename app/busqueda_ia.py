@@ -31,7 +31,9 @@ EQUIVALENCIAS = {
     "remoto": ["remote", "emea", "europe"],
     "londres": ["london", "united kingdom", r"\buk\b"],
     "dublín": ["dublin", "ireland"], "dublin": ["dublin", "ireland"],
-    "madrid": ["madrid"], "barcelona": ["barcelona"],
+    "madrid": ["madrid", "pozuelo", "alcobendas", "las rozas", "majadahonda", "tres cantos", "boadilla", "getafe",
+               "legan[eé]s", "alcal[aá] de henares", "san sebasti[aá]n de los reyes", "rivas", "torrej[oó]n"],
+    "barcelona": ["barcelona", "sant cugat", "l'hospitalet", "badalona", "cornell[aà]"],
 }
 
 

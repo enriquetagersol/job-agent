@@ -30,6 +30,7 @@ import busqueda_ia  # noqa: E402
 import preferencias_ia  # noqa: E402
 import perfil_ia  # noqa: E402
 import sugerencias_ia  # noqa: E402
+import aprendizaje_ia  # noqa: E402
 
 ESTATICOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 ARCHIVOS_PERMITIDOS = [os.path.join(datos.RAIZ, "cv"), os.path.join(datos.RAIZ, "resultados")]
@@ -94,8 +95,9 @@ class Manejador(BaseHTTPRequestHandler):
             return self._fichero(destino)
         if ruta == "/api/estado":
             ok, motivo = cv_ia.disponibilidad()
+            correo = datos._leer(os.path.join(datos.DIR_DATOS, "correo_estado.json"), {})
             return self._json(200, {**datos.estado_completo(), "ia": {"disponible": ok, "motivo": motivo},
-                                    "perfil": perfil_ia.estado()})
+                                    "perfil": perfil_ia.estado(), "aviso_correo": correo.get("ofertas_correo", {})})
         if ruta.startswith("/archivo/"):
             destino = os.path.realpath(os.path.join(datos.RAIZ, unquote(ruta[len("/archivo/"):])))
             if not any(destino.startswith(os.path.realpath(p) + os.sep) for p in ARCHIVOS_PERMITIDOS):
@@ -164,7 +166,9 @@ class Manejador(BaseHTTPRequestHandler):
         if len(p) == 4 and p[:2] == ["api", "ofertas"] and p[3] == "decision":
             def decidir():
                 b = self._cuerpo()
-                return datos.decidir_oferta(p[2], b.get("valor"), b.get("motivo", ""))
+                o = datos.decidir_oferta(p[2], b.get("valor"), b.get("motivo", ""))
+                aprendizaje_ia.programar()  # aprende de la decisión (y su motivo) en un minuto
+                return o
             return self._escritura(decidir)
         return self._json(404, {"error": "no encontrado"})
 
@@ -220,6 +224,10 @@ def main():
         print(slack_bot.arrancar(), flush=True)
     except ImportError:
         pass  # sin slack_bolt instalado: la app funciona igual
+    # Deja cargado el SDK de Claude para que la primera sugerencia no tarde
+    threading.Thread(target=lambda: __import__("anthropic"), daemon=True).start()
+    import correo_ia
+    correo_ia.vigilar(intervalo=120)  # con Gmail conectado: procesa cada correo nuevo al llegar (mira cada 2 min)
     if a.abrir:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:

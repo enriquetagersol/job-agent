@@ -1,12 +1,43 @@
 "use strict";
 
-const E = { estado: null, vista: "candidaturas", filtroOf: "resultados", abierta: null, bandaCerrada: null };
+const E = { estado: null, vista: "candidaturas", filtroOf: "resultados", abierta: null, bandaVista: null };
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
 // ---------- utilidades ----------
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const md = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+// Markdown sencillo a HTML (títulos, listas, tablas, negrita, cursiva, enlaces) para las notas del CV
+const mdLinea = (t) => md(t).replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, "$1<em>$2</em>")
+  .replace(/https?:\/\/[^\s<)]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener">${u.length > 48 ? u.slice(0, 45) + "…" : u}</a>`);
+function mdBloque(texto) {
+  const out = [], lineas = texto.replace(/\r/g, "").split("\n");
+  let lista = null;
+  const cerrar = () => { if (lista) { out.push(`</${lista}>`); lista = null; } };
+  for (let i = 0; i < lineas.length; i++) {
+    const l = lineas[i];
+    let m;
+    if (/^\s*\|.*\|\s*$/.test(l)) {  // tabla: filas seguidas que empiezan y acaban por |
+      cerrar();
+      const filas = [];
+      while (i < lineas.length && /^\s*\|.*\|\s*$/.test(lineas[i])) filas.push(lineas[i++]);
+      i--;
+      const celdas = (f) => f.trim().slice(1, -1).split("|").map((c) => c.trim());
+      const cuerpo = filas.filter((f, k) => !(k === 1 && /^[\s|:-]+$/.test(f)));
+      out.push(`<table>${cuerpo.map((f, k) => `<tr>${celdas(f).map((c) => k === 0 ? `<th>${mdLinea(c)}</th>` : `<td>${mdLinea(c)}</td>`).join("")}</tr>`).join("")}</table>`);
+    } else if ((m = l.match(/^(#{1,4})\s+(.*)/))) {
+      cerrar(); const n = Math.min(4, m[1].length + 2); out.push(`<h${n}>${mdLinea(m[2])}</h${n}>`);
+    } else if ((m = l.match(/^\s*[-*•]\s+(.*)/))) {
+      if (lista !== "ul") { cerrar(); out.push("<ul>"); lista = "ul"; } out.push(`<li>${mdLinea(m[1])}</li>`);
+    } else if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))) {
+      if (lista !== "ol") { cerrar(); out.push("<ol>"); lista = "ol"; } out.push(`<li>${mdLinea(m[1])}</li>`);
+    } else if (l.trim()) {
+      cerrar(); out.push(`<p>${mdLinea(l)}</p>`);
+    } else cerrar();
+  }
+  cerrar();
+  return out.join("");
+}
 const enlaceSeguro = (u) => (/^https?:\/\//i.test(u || "") ? esc(u) : "");
 const dias = (f) => (f ? Math.round((new Date(E.estado.hoy) - new Date(f)) / 864e5) : null);
 const fechaCorta = (f) => (f ? new Date(f + "T00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "");
@@ -26,7 +57,11 @@ async function cambiar(id, cambios, texto) {
   try { await api("PATCH", "/api/candidaturas/" + id, cambios); if (texto) aviso(texto); await recargar(); }
   catch (e) { aviso("Error: " + e.message); }
 }
-const moverA = (id, estado) => { const c = cand(id); return cambiar(id, { estado }, `${c.empresa} → ${NOMBRE[estado]}`); };
+const moverA = async (id, estado) => {
+  const c = cand(id), antes = JSON.stringify(c.proximo_paso || null);
+  await cambiar(id, { estado }, `${c.empresa} → ${NOMBRE[estado]}`);
+  if (!["rechazada", "retirada"].includes(estado)) esperarSugerencia(id, antes);
+};
 
 // ---------- navegación ----------
 function irA(vista) {
@@ -45,7 +80,7 @@ document.addEventListener("click", (ev) => {
 
 const esNueva = (o) => !!o.lote && o.lote === E.estado.ultimo_lote && !o.decision;
 const resultados = () => E.estado.ofertas.filter((o) => o.estado_analisis === "recomendada" && !o.decision);
-// Guardadas = te interesan y aún no las has enviado. En cuanto avanzan, viven solo en Mis candidaturas.
+// «Te interesa» = te interesan y aún no las has enviado. En cuanto avanzan, viven solo en Mis candidaturas.
 const guardados = () => E.estado.ofertas.filter((o) => {
   if (!o.decision || o.decision.valor !== "interesa") return false;
   const c = o.candidatura_id && cand(o.candidatura_id);
@@ -57,30 +92,53 @@ function pintar() {
   const ins = $("#ins-ofertas"); ins.textContent = n; ins.hidden = !n;
   pintarBanda(); pintarOfertas(); pintarDashboard(); pintarBienvenida();
   if ($("#dlg-cv").open) pintarCvInfo();
+  if ($("#dlg-cvprev").open) pintarCvPrevia();
   if (E.abierta) { const c = cand(E.abierta); c ? pintarCajon(c) : cerrarCajon(); }
 }
 
 // ---------- búsqueda ----------
+// Banda superior: progreso mientras se busca y, al terminar, un aviso MOMENTÁNEO (se va solo).
+// También avisa un momento cuando la revisión del correo encuentra ofertas que encajan (alertas de empleo).
+const AVISO_MS = 12000, RECIENTE_MS = 10 * 60000;
+const reciente = (iso) => iso && Date.now() - new Date(iso).getTime() < RECIENTE_MS;
+function mostrarBanda(clave, clase, html) {
+  const el = $("#banda");
+  if (E.bandaVista === clave) return;
+  E.bandaVista = clave;
+  el.className = "banda " + clase;
+  el.innerHTML = html + '<button class="icono" id="banda-x" aria-label="Cerrar">✕</button>';
+  el.hidden = false;
+  const cerrar = () => { if (E.bandaVista === clave) el.hidden = true; };
+  $("#banda-x").addEventListener("click", cerrar);
+  clearTimeout(mostrarBanda.t); mostrarBanda.t = setTimeout(cerrar, AVISO_MS);
+}
 function pintarBanda() {
-  const b = E.estado.busqueda || {}, el = $("#banda");
-  const btn = $("#btn-buscar");
+  const b = E.estado.busqueda || {}, el = $("#banda"), btn = $("#btn-buscar");
   btn.disabled = b.estado === "buscando";
   btn.textContent = b.estado === "buscando" ? "Buscando…" : "🔍 Buscar ofertas";
-  if (!b.estado || b.estado === "inactivo" || E.bandaCerrada === (b.fin || b.inicio)) { el.hidden = true; return; }
   if (b.estado === "buscando") {
     const pct = b.total ? Math.round((100 * (b.hechas || 0)) / b.total) : 5;
+    E.bandaVista = "buscando";
     el.className = "banda";
     el.innerHTML = `<span class="girando"></span><span>${esc(b.fase || "Buscando…")}</span><div class="progreso"><div style="width:${pct}%"></div></div>`;
-  } else if (b.estado === "listo") {
-    el.className = "banda ok";
-    el.innerHTML = `<span>✓ ${esc(b.fase)}</span>
-      ${b.nuevas ? `<a href="#" data-ir="ofertas" data-f="resultados">Ver ofertas</a>` : ""}<button class="icono" id="banda-x" aria-label="Cerrar">✕</button>`;
-  } else {
-    el.className = "banda mal";
-    el.innerHTML = `<span>No se pudo completar la búsqueda: ${esc(b.mensaje)}</span><button class="icono" id="banda-x" aria-label="Cerrar">✕</button>`;
+    el.hidden = false;
+    return;
   }
-  el.hidden = false;
-  const x = $("#banda-x"); if (x) x.addEventListener("click", () => { E.bandaCerrada = b.fin || b.inicio; el.hidden = true; });
+  if (E.bandaVista === "buscando") el.hidden = true;  // acaba de terminar
+  const vistos = () => { try { return JSON.parse(localStorage.getItem("bandas-vistas") || "[]"); } catch { return []; } };
+  const yaVisto = (k) => vistos().includes(k);
+  const marcar = (k) => { try { localStorage.setItem("bandas-vistas", JSON.stringify([...vistos(), k].slice(-20))); } catch { /* sin almacenamiento: da igual */ } };
+  const correo = E.estado.aviso_correo || {};
+  if (b.estado === "listo" && reciente(b.fin) && !yaVisto("b" + b.fin)) {
+    marcar("b" + b.fin);
+    mostrarBanda("b" + b.fin, "ok", `<span>✓ ${esc(b.fase)}</span>${b.nuevas ? `<a href="#" data-ir="ofertas" data-f="resultados">Ver ofertas</a>` : ""}`);
+  } else if (b.estado === "error" && reciente(b.fin || b.inicio) && !yaVisto("e" + (b.fin || b.inicio))) {
+    marcar("e" + (b.fin || b.inicio));
+    mostrarBanda("e" + (b.fin || b.inicio), "mal", `<span>No se pudo completar la búsqueda: ${esc(b.mensaje)}</span>`);
+  } else if (correo.n && reciente(correo.cuando) && !yaVisto("c" + correo.cuando)) {
+    marcar("c" + correo.cuando);
+    mostrarBanda("c" + correo.cuando, "ok", `<span>✨ ${plural(correo.n, "oferta nueva", "ofertas nuevas")} de tus alertas de correo que te pueden interesar</span><a href="#" data-ir="ofertas" data-f="resultados">Ver ofertas</a>`);
+  }
 }
 function abrirBuscar() {
   const ia = E.estado.ia || {};
@@ -91,7 +149,7 @@ function abrirBuscar() {
 $("#btn-buscar").addEventListener("click", abrirBuscar);
 $("#dlg-buscar").addEventListener("close", async () => {
   if ($("#dlg-buscar").returnValue !== "ok") return;
-  try { await api("POST", "/api/busqueda"); E.bandaCerrada = null; aviso("Búsqueda en marcha"); await recargar(); }
+  try { await api("POST", "/api/busqueda"); aviso("Búsqueda en marcha"); await recargar(); }
   catch (e) { aviso("Error: " + e.message); }
 });
 // Refresco mientras se genera algo (búsqueda o CV)
@@ -100,7 +158,10 @@ function vigilar() {
   const ocupado = (E.estado.busqueda || {}).estado === "buscando" || (E.estado.perfil || {}).estado === "analizando"
     || E.estado.candidaturas.some((c) => (c.cv_trabajo || {}).estado === "generando");
   const perfilAntes = (E.estado.perfil || {}).estado;
-  if (!ocupado) return;
+  if (!ocupado) {  // en reposo, se refresca cada minuto (novedades del correo, ofertas de alertas…)
+    vigilar.t = setTimeout(() => { if (document.visibilityState === "visible") recargar(); else vigilar(); }, 60000);
+    return;
+  }
   const antes = JSON.stringify(E.estado.candidaturas.map((c) => [c.id, (c.cv_trabajo || {}).estado]));
   vigilar.t = setTimeout(async () => {
     const previo = new Map(JSON.parse(antes));
@@ -115,6 +176,64 @@ function vigilar() {
     });
   }, 4000);
 }
+
+// ---------- CV adaptado: crear y vista previa ----------
+// «CV optimizado» abre esta ventana: si ya hay un CV para la oferta lo enseña; si no, lo crea (1-3 min) y lo enseña.
+// Desde la vista previa: descargar o generar otro.
+async function abrirCvPrevia(cid) {
+  const c = cand(cid); if (!c) return;
+  E.cvPrevia = cid;
+  const dlg = $("#dlg-cvprev");
+  if (!dlg.open) dlg.showModal();
+  if (!c.cv_adaptado && (c.cv_trabajo || {}).estado !== "generando") await crearCv(cid);
+  pintarCvPrevia();
+}
+async function crearCv(cid) {
+  try { await api("POST", `/api/candidaturas/${cid}/cv`); await recargar(); }
+  catch (e) { aviso("Error: " + e.message); }
+  pintarCvPrevia();
+}
+function pintarCvPrevia() {
+  const dlg = $("#dlg-cvprev"), c = cand(E.cvPrevia);
+  if (!dlg.open || !c) return;
+  const tr = c.cv_trabajo || {}, ia = E.estado.ia || {};
+  $("#cvprev-titulo").textContent = `Tu CV para ${c.puesto} · ${c.empresa}`;
+  const cuerpo = $("#cvprev-cuerpo"), botones = $("#cvprev-botones");
+  if (tr.estado === "generando") {
+    cuerpo.innerHTML = `<p class="esperando"><span class="girando"></span>Creando tu CV adaptado a esta oferta… tarda 1-3 minutos.
+      Puedes cerrar esta ventana: te aviso cuando esté y lo verás al pulsar «CV optimizado».</p>`;
+    botones.innerHTML = `<button data-cerrar>Cerrar</button>`;
+  } else if (c.cv_adaptado) {
+    const url = "/archivo/" + encodeURI(c.cv_adaptado), nombre = c.cv_adaptado.split("/").pop();
+    // Notas: las del CV actual (si el CV se hizo con Claude Code, están en la misma carpeta que el PDF)
+    const notas = tr.notas && c.cv_adaptado.startsWith(tr.notas.replace(/[^/]+$/, "")) ? tr.notas : c.cv_adaptado.replace(/[^/]+$/, "notas.md");
+    if (cuerpo.dataset.pdf !== url) {
+      cuerpo.dataset.pdf = url;
+      cuerpo.innerHTML = `<div class="cv-y-notas"><iframe class="pdf" src="${url}#view=FitH" title="Vista previa del CV"></iframe>
+        <aside class="notas-cv" hidden><h3>📝 Qué he cambiado y qué revisar</h3><div class="md"></div></aside></div>`;
+      fetch("/archivo/" + encodeURI(notas)).then((r) => (r.ok ? r.text() : "")).then((t) => {
+        if (!t || cuerpo.dataset.pdf !== url) return;
+        const panel = $(".notas-cv", cuerpo);
+        $(".md", panel).innerHTML = mdBloque(t.replace(/^# .*\n/, ""));  // el título ya está arriba
+        panel.hidden = false;
+      }).catch(() => {});
+    }
+    const aviso_ = tr.estado === "listo" && tr.mensaje ? `<span class="err">⚠️ ${esc(tr.mensaje)}</span>` : "";
+    botones.innerHTML = `${aviso_}
+      <span class="hueco"></span><button data-cerrar>Cerrar</button>
+      <button data-otro ${ia.disponible ? "" : "disabled"}>🔄 Generar otro</button>
+      <a class="boton primario" href="${url}" download="${esc(nombre)}">⬇️ Descargar</a>`;
+  } else {
+    cuerpo.innerHTML = tr.estado === "error" ? `<p class="err">No se pudo crear el CV: ${esc(tr.mensaje)}</p>`
+      : `<p class="err">${esc(ia.motivo || "No se pudo empezar a crear el CV.")}</p>`;
+    delete cuerpo.dataset.pdf;
+    botones.innerHTML = `<button data-cerrar>Cerrar</button><button class="primario" data-otro ${ia.disponible ? "" : "disabled"}>Intentar de nuevo</button>`;
+  }
+  $("[data-cerrar]", botones).addEventListener("click", () => dlg.close());
+  const otro = $("[data-otro]", botones);
+  if (otro) otro.addEventListener("click", async () => { otro.disabled = true; delete cuerpo.dataset.pdf; await crearCv(c.id); });
+}
+$("#dlg-cvprev").addEventListener("close", () => { E.cvPrevia = null; });
 
 // ---------- Mi CV ----------
 function pintarCvInfo() {
@@ -246,36 +365,44 @@ function tarjetaOferta(o) {
     .map(([k, t, cls]) => `<div class="${cls}"><b>${t}</b>${md(s[k] || (k === "por_que_no_encaja" ? s.gaps : "") || "—")}</div>`).join("");
   let pie;
   if (o.decision && o.decision.valor === "interesa") {
-    const c = o.candidatura_id && cand(o.candidatura_id);
-    pie = `<div class="decision"><span class="chip ok">Guardada</span>
-      ${c ? `<span class="sub">Candidatura: ${esc(NOMBRE[c.estado])}</span><a href="#" data-abrir="${c.id}">Ver candidatura</a>` : ""}
-      <button class="peq enlace" data-quitar="${o.id}">Ya no me interesa</button></div>`;
+    // «Te interesa»: CV optimizado (vista previa), marcarla como aplicada o descartarla
+    const c = o.candidatura_id && cand(o.candidatura_id), tr = (c && c.cv_trabajo) || {};
+    const creando = c && tr.estado === "generando";
+    pie = `<div class="decision">
+      ${c ? `<button class="primario" data-cv="${c.id}">${creando ? '<span class="girando"></span>Creando tu CV…' : "📄 CV optimizado"}</button>
+             <button class="aplicada" data-aplicada="${c.id}">✅ Aplicada</button>` : ""}
+      <button class="no-interesa" data-quitar="${o.id}">👎 Ya no me interesa</button></div>`;
   } else {
     pie = `<div class="decidir"><button class="si" data-decidir="${o.id}" data-v="interesa">👍 Me interesa</button>
       <button class="no" data-decidir="${o.id}" data-v="no interesa">👎 No me interesa</button></div>`;
   }
   return `<article class="oferta" id="of-${o.id}">
-    <div class="of-cab"><div class="encaje ${nivel}" title="Encaje con tu perfil (0-100)">${o.encaje ?? "–"}</div>
+    <div class="of-cab"><div class="encaje ${nivel}" title="Encaje con tu perfil y tus preferencias (0-100)"><span class="et">Encaje</span><span class="n">${o.encaje ?? "–"}<small>/100</small></span></div>
       <div><div class="of-tit">${esc(o.puesto)}${esNueva(o) ? ' <span class="nueva">Nueva</span>' : ""}</div>
       <div class="of-emp">${esc(o.empresa)}${enlaceSeguro(o.url) ? ` · <a href="${enlaceSeguro(o.url)}" target="_blank" rel="noopener">Ver oferta ↗</a>` : ""}</div>
       ${o.datos ? `<div class="of-datos">${esc(o.datos)}</div>` : ""}</div></div>
-    ${o.nota_previa ? `<div class="previa">📌 ${esc(o.nota_previa)}</div>` : ""}
     <div class="sencillo">${o.empresa_desc ? `<div class="empresa-desc"><b>La empresa</b>${md(o.empresa_desc)}</div>` : ""}${secciones}</div>${pie}</article>`;
 }
 function pintarOfertas() {
   const res = resultados(), gua = guardados();
   $$("#filtro-ofertas button").forEach((b) => {
     b.classList.toggle("activa", b.dataset.f === E.filtroOf);
-    b.textContent = b.dataset.f === "resultados" ? `Resultados de búsqueda (${res.length})` : `Guardadas (${gua.length})`;
+    b.textContent = b.dataset.f === "resultados" ? `Resultados de búsqueda (${res.length})` : `Te interesa (${gua.length})`;
   });
   // Las nuevas primero; dentro de cada grupo, por encaje
   const os = (E.filtroOf === "resultados" ? res : gua).sort((a, b) => (esNueva(b) - esNueva(a)) || ((b.encaje ?? -1) - (a.encaje ?? -1)));
   const vacio = E.filtroOf === "resultados"
     ? `No hay ofertas nuevas por revisar.<br><button class="primario" data-buscar>🔍 Buscar ofertas</button>`
-    : "Aún no has guardado ninguna oferta. Pulsa «Me interesa» en los resultados.";
+    : "Aún no hay ofertas aquí. Pulsa «👍 Me interesa» en los resultados.";
   $("#lista-ofertas").innerHTML = os.length ? os.map(tarjetaOferta).join("") : `<div class="vacio">${vacio}</div>`;
   $$("[data-decidir]").forEach((b) => b.addEventListener("click", () => pedirMotivo(b.dataset.decidir, b.dataset.v)));
   $$("[data-quitar]").forEach((b) => b.addEventListener("click", () => pedirMotivo(b.dataset.quitar, "no interesa")));
+  $$("[data-cv]").forEach((b) => b.addEventListener("click", () => abrirCvPrevia(b.dataset.cv)));
+  $$("[data-aplicada]").forEach((b) => b.addEventListener("click", async () => {
+    const c = cand(b.dataset.aplicada);
+    await moverA(c.id, "enviada");  // sale de «Te interesa» y pasa al tracker como Aplicada
+    aviso(`✅ ${c.empresa}: aplicada. Ahora está en Mis candidaturas.`);
+  }));
 }
 function filtro(f) { E.filtroOf = f; pintarOfertas(); }
 $$("#filtro-ofertas button").forEach((b) => b.addEventListener("click", () => filtro(b.dataset.f)));
@@ -301,7 +428,7 @@ $("#dlg-motivo").addEventListener("close", async () => {
     ? [...$$("#motivo-opciones input:checked").map((i) => i.value), $("#motivo-texto").value.trim()].filter(Boolean) : [];
   try {
     const o = await api("POST", `/api/ofertas/${id}/decision`, { valor, motivo: partes.join("; ") });
-    aviso(valor === "interesa" ? `👍 ${o.empresa} guardada y añadida a Por aplicar` : "👎 Anotado. No volverá a aparecer");
+    aviso(valor === "interesa" ? `👍 ${o.empresa} está en «Te interesa»` : "👎 Anotado. No volverá a aparecer");
     await recargar();
   } catch (e) { aviso("Error: " + e.message); }
 });
@@ -422,7 +549,7 @@ function pintarDashboard() {
     const pp = c.proximo_paso;
     let paso = pp && pp.texto ? `<div>${pp.sugerido ? '<span class="bombilla" title="Sugerido por Job Agent">💡</span> ' : ""}${esc(pp.texto)}</div>`
       + (pp.fecha ? `<div class="cuando ${pp.fecha < E.estado.hoy ? "tarde" : ""}">${esc(fechaCorta(pp.fecha))}</div>` : "") : "";
-    if (!paso && c.estado === "por_aplicar" && tr.estado === "generando") paso = "Creando CV…";
+    if (!paso && c.estado === "por_aplicar" && tr.estado === "generando") paso = "Creando tu CV…";
     const cerrada = cerradaC(c);
     return `<tr class="${cerrada ? "cerrada" : ""}" data-abrir="${c.id}" data-id="${c.id}" tabindex="0" ${cerrada ? "" : "data-mov"}>
       <td class="asa-col">${cerrada ? "" : `<button type="button" class="asa" aria-label="Mover ${esc(c.empresa)} (flechas arriba/abajo)" title="Arrastra para ordenar">⠿</button>`}</td>
@@ -455,6 +582,7 @@ function abrirCajon(id) {
   E.editando = { fecha: false, paso: false };
   form.proximo_fecha.value = (c.proximo_paso && c.proximo_paso.fecha) || "";
   form.proximo_texto.value = (c.proximo_paso && c.proximo_paso.texto) || "";
+  $("#cajon-sugerido").textContent = "💡 sugerido por Job Agent";
   $("#cajon-sugerido").hidden = !(c.proximo_paso && c.proximo_paso.sugerido);
   pintarCajon(c);
   $("#cajon").hidden = false; $("#velo").hidden = false;
@@ -496,39 +624,38 @@ form.addEventListener("submit", async (ev) => {
   if (nueva) Object.assign(cambios, { nota: t, fecha_nota: f });
   else if (t && f !== o.fecha) cambios.corregir_fecha_novedad = f;  // misma novedad, otra fecha
   if (!Object.keys(cambios).length) { aviso("No hay cambios"); return; }
+  const antes = JSON.stringify((cand(id) || {}).proximo_paso || null);
   await cambiar(id, cambios, "Guardado ✓");
   if (E.abierta === id) abrirCajon(id);
-  if (nueva && !("proximo_paso" in cambios)) {  // el próximo paso sugerido llega en unos segundos
-    const refrescar = async () => { await recargar(); if (E.abierta === id && !E.editando.paso) abrirCajon(id); };
-    setTimeout(refrescar, 6000); setTimeout(refrescar, 15000);
-  }
+  if (nueva && !("proximo_paso" in cambios)) esperarSugerencia(id, antes);
 });
+
+// Tras una novedad o un cambio de etapa, Job Agent sugiere el próximo paso (tarda unos segundos):
+// se indica en el detalle y se actualiza en cuanto llega, salvo que ella esté escribiendo uno.
+async function esperarSugerencia(id, antes) {
+  const marca = () => { if (E.abierta === id && !E.editando.paso) { $("#cajon-sugerido").hidden = false; $("#cajon-sugerido").textContent = "💡 pensando el próximo paso…"; } };
+  marca();
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    await recargar();
+    const c = cand(id);
+    if (!c) return;
+    if (JSON.stringify(c.proximo_paso || null) !== antes) break;
+    marca();
+  }
+  if (E.abierta === id && !E.editando.paso) abrirCajon(id);
+}
 
 // CV adaptado (API de Claude): solo en candidaturas por aplicar
 function pintarBloqueCv(c) {
   const el = $("#cajon-cv");
   if (c.estado !== "por_aplicar") { el.hidden = true; return; }
-  const tr = c.cv_trabajo || {}, ia = E.estado.ia || {};
-  let cuerpo;
-  if (tr.estado === "generando") {
-    cuerpo = `<div><span class="girando"></span>Creando tu CV… tarda 1-3 minutos. Puedes cerrar este panel.</div>`;
-  } else {
-    const sinUrl = !(c.url || "").startsWith("http");
-    const motivo = !ia.disponible ? ia.motivo : sinUrl ? "Añade el enlace a la oferta en «Más detalles» y guarda." : "";
-    const ver = c.cv_adaptado ? `<a class="boton primario" href="/archivo/${encodeURI(c.cv_adaptado)}" target="_blank">Abrir CV</a>${tr.notas ? `<a href="/archivo/${encodeURI(tr.notas)}" target="_blank">Qué he cambiado y qué te falta</a>` : ""}` : "";
-    cuerpo = `${tr.estado === "error" ? `<div class="err">No se pudo crear: ${esc(tr.mensaje)}</div>` : ""}
-      ${tr.estado === "listo" && tr.mensaje ? `<div class="err">⚠️ ${esc(tr.mensaje)} (en las notas)</div>` : ""}
-      <div class="fila-botones">${ver}<button type="button" class="${c.cv_adaptado ? "" : "primario"}" id="btn-cv" ${motivo ? "disabled" : ""}>${c.cv_adaptado ? "Crear otro" : "Crear CV para esta oferta"}</button></div>
-      ${motivo ? `<div class="sub">${esc(motivo)}</div>` : c.cv_adaptado ? "" : `<div class="sub">Claude adapta tu CV a esta oferta sin inventar nada.</div>`}`;
-  }
-  el.innerHTML = `<div class="tit">Tu CV para esta oferta</div>${cuerpo}`;
+  const creando = (c.cv_trabajo || {}).estado === "generando";
+  el.innerHTML = `<div class="tit">Tu CV para esta oferta</div>
+    <div class="fila-botones"><button type="button" class="primario" id="btn-cv">${creando ? '<span class="girando"></span>Creando tu CV…' : "📄 CV optimizado"}</button></div>
+    <div class="sub">Claude adapta tu CV a esta oferta sin inventar nada. Lo verás antes de descargarlo.</div>`;
   el.hidden = false;
-  const b = $("#btn-cv", el);
-  if (b) b.addEventListener("click", async () => {
-    b.disabled = true;
-    try { await api("POST", `/api/candidaturas/${c.id}/cv`); aviso("Creando CV…"); await recargar(); }
-    catch (e) { aviso("Error: " + e.message); b.disabled = false; }
-  });
+  $("#btn-cv", el).addEventListener("click", () => abrirCvPrevia(c.id));
 }
 
 // ---------- arranque ----------
