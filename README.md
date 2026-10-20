@@ -1,6 +1,6 @@
 # Job Agent
 
-**A personal AI job-search assistant.** It finds openings that match my experience (from my CV) and my
+**An AI job-search assistant.** It finds openings that match my experience (from my CV) and my
 preferences by reading every posting in full, writes a tailored one-page CV for each one, tracks my
 applications, picks up updates from my Gmail and lets me talk to it on Slack from my phone. The more I use
 it, the better it gets: it learns from the openings I like, the ones I reject and the applications where
@@ -31,7 +31,7 @@ batches of 10) · privacy (runs locally; keys never leave the machine).
 
 **Built with:** Python, HTML/CSS/JS, Claude API and Claude Code, Gmail API (OAuth), Slack API (Socket
 Mode). ~5,100 lines in 15 modules. I designed the product, flows, rules and limits, built it with Claude
-Code as a copilot and validated it in my own job search.
+Code as a copilot and validated it in daily, real use.
 
 ---
 
