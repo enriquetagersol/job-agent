@@ -12,6 +12,8 @@ I've been turned down.
 |---|---|
 | ![Openings with fit score and analysis](docs/ja-ofertas.jpg) | ![Tailored CV preview with notes](docs/ja-cv.jpg) |
 
+![Company cards for every active application](docs/ja-empresas.jpg)
+
 <sub>Screenshots use fictitious demo data: made-up person, companies and openings.</sub>
 
 **What it does**
@@ -21,6 +23,8 @@ I've been turned down.
 - **Tailored CV:** one page per opening, never inventing anything, with notes on what they value, what
   changed and which gaps to prepare. It flags any figure that isn't in my CV.
 - **Tracking:** a dashboard with today's to-dos, applications by stage and an AI-suggested next step.
+- **Company cards:** one card per company with an active application: what it does and for whom, type,
+  size or funding, HQ, website and my roles there. Researched on the web automatically, once per company.
 - **Gmail:** checks the inbox every 2 minutes, detects interviews, rejections, offers and deadlines, and
   updates the application. Read and label only.
 - **Slack:** 17 actions on my data from my phone ("I got rejected at X", "research this opening"…).
@@ -30,7 +34,7 @@ up · cost under control (free filters, then a ~$0.0005 title screening, then in
 batches of 10) · privacy (runs locally; keys never leave the machine).
 
 **Built with:** Python, HTML/CSS/JS, Claude API and Claude Code, Gmail API (OAuth), Slack API (Socket
-Mode). ~5,100 lines in 15 modules. I designed the product, flows, rules and limits, built it with Claude
+Mode). ~5,200 lines in 16 modules. I designed the product, flows, rules and limits, built it with Claude
 Code as a copilot and validated it in daily, real use.
 
 ---
@@ -73,7 +77,7 @@ Requisitos: Python 3.9+ y Google Chrome (para generar los CVs en PDF). Para el a
 **Abrir:** doble clic en `Abrir Job Agent.command`, o `.venv/bin/python -I app/servidor.py --abrir`.
 Se abre en `http://127.0.0.1:8765`, solo en tu Mac. Para cerrarla, cierra la ventana de Terminal.
 
-Dos pestañas:
+Tres pestañas:
 
 1. **Mis candidaturas** — un dashboard de solo lectura: **Para hoy** resumido en texto, tus
    cifras (enviadas, % con respuesta, entrevistas, ofertas), las **candidaturas por etapa** y una
@@ -92,6 +96,10 @@ Dos pestañas:
    harías, por qué encaja y por qué no encaja**; pulsas **👍 Me interesa** o **👎 No me interesa** y
    una ventana te pregunta el porqué (opcional). *Te interesa* son las que te interesan y aún no has
    enviado; las que no te interesan desaparecen.
+3. **Empresas** — una ficha por cada empresa en la que tienes una candidatura por aplicar, aplicada, en
+   entrevistas o con oferta, de la más avanzada a la menos: qué hace y para quién, tipo (startup, scale-up,
+   big tech…), tamaño o financiación, sede, web y tus puestos allí con su etapa. Se investigan solas en la web
+   en cuanto la empresa entra en el proceso, una sola vez por empresa.
 
 **CV adaptado desde la app:** Claude lee la oferta y adapta tu CV maestro sin inventar nada; en
 1-3 minutos tienes el PDF de una página y unas notas con lo que valoran, los cambios, lo que te
