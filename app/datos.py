@@ -128,15 +128,25 @@ def crear_candidatura(empresa, puesto, estado="por_aplicar", **campos):
         return c
 
 
-CAMPOS_EXTRA = {"cv_trabajo", "prioridad"}  # campos opcionales que pueden no existir en candidaturas antiguas
+CAMPOS_EXTRA = {"cv_trabajo", "prioridad", "descripcion"}  # campos opcionales que pueden no existir en candidaturas antiguas
+
+
+def info_oferta(c):
+    """(enlace, descripción, oferta) con lo que se sabe del puesto de una candidatura."""
+    oferta = next((o for o in ofertas() if o["id"] == c.get("oferta_id")), None)
+    url = c.get("url") if (c.get("url") or "").startswith("http") else ((oferta or {}).get("url") if ((oferta or {}).get("url") or "").startswith("http") else "")
+    desc = c.get("descripcion") or (oferta or {}).get("descripcion") or ""
+    return url, desc, oferta
 
 
 def puede_generar_cv(c):
-    """Solo se generan CVs para candidaturas que interesan y aún no se han enviado."""
+    """Solo se generan CVs para candidaturas que interesan y aún no se han enviado. Basta con el enlace, la
+    descripción del puesto o el análisis de la oferta."""
     if c["estado"] != "por_aplicar":
         return False, "Solo para candidaturas en «Por aplicar» (las que te interesan)."
-    if not (c.get("url") or "").startswith("http"):
-        return False, "Añade primero el enlace a la oferta."
+    url, desc, oferta = info_oferta(c)
+    if not (url or desc or (oferta or {}).get("sencillo")):
+        return False, "Necesito el enlace a la oferta o su descripción (puedes pegarla en Slack)."
     if (c.get("cv_trabajo") or {}).get("estado") == "generando":
         return False, "Ya se está generando."
     return True, ""
@@ -237,7 +247,7 @@ def importar_ofertas(nuevas, informe=""):
             else:
                 o = {"id": _siguiente_id(doc["ofertas"], "o"), "url": n.get("url", ""), "empresa": "",
                      "puesto": "", "encaje": None, "estado_analisis": "recomendada", "motivo_descarte": "",
-                     "fecha_analisis": hoy(), "informe": informe, "datos": "", "empresa_desc": "", "sencillo": {},
+                     "fecha_analisis": hoy(), "informe": informe, "datos": "", "empresa_desc": "", "descripcion": "", "sencillo": {},
                      "puntuacion": "", "rasgos": [], "decision": None, "candidatura_id": None, "lote": lote}
                 o.update({k: v for k, v in n.items() if k in o and k != "id"})
                 doc["ofertas"].append(o)
@@ -270,7 +280,7 @@ def decidir_oferta(oid, valor, motivo=""):
             actualizar_candidatura(c["id"], estado="retirada", nota="Ya no le interesa")
     if valor == "interesa" and not o.get("candidatura_id"):
         c = crear_candidatura(o["empresa"], o["puesto"], estado="por_aplicar",
-                              url=o["url"], oferta_id=o["id"],
+                              url=o["url"] if (o["url"] or "").startswith("http") else "", oferta_id=o["id"],
                               detalle=f"Desde ofertas (encaje {o.get('encaje')})")
         with _lock:
             doc = _leer(F_OFER, {"ofertas": []})

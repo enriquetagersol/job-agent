@@ -90,7 +90,7 @@ const guardados = () => E.estado.ofertas.filter((o) => {
 function pintar() {
   const n = resultados().length;
   const ins = $("#ins-ofertas"); ins.textContent = n; ins.hidden = !n;
-  pintarBanda(); pintarOfertas(); pintarDashboard(); pintarBienvenida();
+  pintarBanda(); pintarOfertas(); pintarDashboard(); pintarBienvenida(); pintarEmpresas();
   if ($("#dlg-cv").open) pintarCvInfo();
   if ($("#dlg-cvprev").open) pintarCvPrevia();
   if (E.abierta) { const c = cand(E.abierta); c ? pintarCajon(c) : cerrarCajon(); }
@@ -157,6 +157,7 @@ function vigilar() {
   clearTimeout(vigilar.t);
   const ocupado = (E.estado.busqueda || {}).estado === "buscando" || (E.estado.perfil || {}).estado === "analizando"
     || (E.estado.cv_general || {}).estado === "generando"
+    || (E.vista === "empresas" && (E.estado.empresas || []).some((e) => !e.ficha))
     || E.estado.candidaturas.some((c) => (c.cv_trabajo || {}).estado === "generando");
   const perfilAntes = (E.estado.perfil || {}).estado;
   if (!ocupado) {  // en reposo, se refresca cada minuto (novedades del correo, ofertas de alertas…)
@@ -482,6 +483,28 @@ $("#dlg-motivo").addEventListener("close", async () => {
 // Cerrar con Esc/fuera = cancelar (no decide)
 $("#dlg-motivo").addEventListener("cancel", () => { decisionPendiente = null; });
 
+// ---------- EMPRESAS: ficha de cada empresa con candidatura activa ----------
+const ORDEN_EMPRESA = ["oferta", "en_proceso", "enviada", "por_aplicar"];
+function pintarEmpresas() {
+  const lista = (E.estado.empresas || []).map((e) => ({ ...e, nivel: Math.min(...e.candidaturas.map((c) => ORDEN_EMPRESA.indexOf(c.estado))) }))
+    .sort((a, b) => (a.nivel - b.nivel) || a.empresa.localeCompare(b.empresa));
+  const caja = $("#lista-empresas");
+  if (!lista.length) { caja.innerHTML = `<div class="vacio">Aún no tienes candidaturas activas.</div>`; return; }
+  caja.innerHTML = lista.map((e) => {
+    const f = e.ficha;
+    const puestos = e.candidaturas.map((c) => `<a href="#" class="puesto-emp" data-abrir="${c.id}"><span class="etapa e-${c.estado}">${NOMBRE[c.estado]}</span> ${esc(c.puesto)}</a>`).join("");
+    let cuerpo;
+    if (!f) cuerpo = `<p class="sub"><span class="girando"></span>Buscando qué hace esta empresa…</p>`;
+    else if (!f.encontrada || !f.descripcion) cuerpo = `<p class="sub">No he encontrado información fiable sobre esta empresa.</p>`;
+    else {
+      const datos_ = [f.tipo, f.tamano, f.sede].filter(Boolean).map(esc).join(" · ");
+      cuerpo = `<p>${esc(f.descripcion)}</p>${datos_ ? `<div class="datos-emp">${datos_}</div>` : ""}
+        ${enlaceSeguro(f.web) ? `<a class="web-emp" href="${enlaceSeguro(f.web)}" target="_blank" rel="noopener">${esc(f.web.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, ""))} ↗</a>` : ""}`;
+    }
+    return `<article class="empresa"><h3>${esc(e.empresa)}</h3>${cuerpo}<div class="puestos-emp">${puestos}</div></article>`;
+  }).join("");
+}
+
 // ---------- MIS CANDIDATURAS: dashboard (solo lectura; se edita en el detalle) ----------
 function sinRespuesta(c) {
   const d = dias(c.fecha_actualizacion);
@@ -708,7 +731,7 @@ function pintarBloqueCv(c) {
 // ---------- arranque ----------
 (async () => {
   let v = "candidaturas"; try { v = localStorage.getItem("ja-vista") || v; } catch (_) {}
-  if (!["ofertas", "candidaturas"].includes(v)) v = "candidaturas";
+  if (!["ofertas", "candidaturas", "empresas"].includes(v)) v = "candidaturas";
   await recargar(); irA(v);
   // Enlaces directos: ?vista=ofertas&filtro=guardados · ?candidatura=c001 · ?cv=c010 (vista previa del CV)
   const q = new URLSearchParams(location.search);

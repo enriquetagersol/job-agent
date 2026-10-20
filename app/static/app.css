@@ -357,3 +357,14 @@ dialog h2 { margin-bottom: 4px; }
 .anadir-cv textarea { width: 100%; }
 .propuesta { border: 1px solid var(--borde); border-radius: 8px; padding: 10px 12px; background: var(--superficie2); font-size: 14px; }
 .propuesta ul { margin: 6px 0; padding-left: 18px; } .propuesta li { margin: 4px 0; }
+
+/* Empresas */
+.lista-empresas { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-top: 14px; }
+.empresa { background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.empresa h3 { margin: 0; font-size: 17px; }
+.empresa p { margin: 0; font-size: 14.5px; line-height: 1.5; }
+.datos-emp { font-size: 13px; color: var(--suave); }
+.web-emp { font-size: 13.5px; }
+.puestos-emp { display: grid; gap: 6px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--borde); }
+.puesto-emp { font-size: 13.5px; color: var(--texto); text-decoration: none; display: flex; gap: 8px; align-items: baseline; }
+.puesto-emp:hover { color: var(--acento); }

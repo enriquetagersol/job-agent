@@ -361,6 +361,8 @@ def investigar_oferta(url="", empresa="", puesto="", texto="", ubicacion=""):
         raise ValueError("No he encontrado esa oferta en la web (puede que esté cerrada). Si la tienes, pégame su texto.")
     res["empresa"] = res["empresa"] or empresa
     oferta = _a_oferta(res, puesto or res.get("puesto") or f"Oferta de {res['empresa']}", "vista-por-ti")
+    if len(texto.strip()) >= 300:
+        oferta["descripcion"] = texto.strip()  # para poder hacer el CV optimizado sin enlace
     if not oferta["url"]:
         oferta["url"] = f"sin-enlace:{_slug(oferta['empresa'])}-{_slug(oferta['puesto'])}"
     datos.importar_ofertas([oferta], informe=f"vista-por-ti {datos.hoy()}")

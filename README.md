@@ -199,6 +199,7 @@ app/cv_ia.py            CV adaptado con la API de Claude (lo usa el botón de la
 app/busqueda_ia.py      búsqueda de ofertas con la API de Claude (botón Buscar ofertas)
 app/perfil_ia.py        análisis del CV subido con la API de Claude (botón Mi CV)
 app/empresas_ia.py      descripción de la empresa de cada oferta («La empresa»), con búsqueda web
+app/fichas_empresas.py  fichas de las empresas de tus candidaturas activas (pestaña «Empresas»)
 app/agente_chat.py      agente conversacional con herramientas sobre los datos (lo usa Slack)
 app/gmail_lector.py     acceso a Gmail (leer y poner la etiqueta JOB SEARCH; nada más)
 app/maestro_ia.py       añadir cosas al CV maestro cuando lo pides (proyectos, logros, skills), con propuesta antes de guardar

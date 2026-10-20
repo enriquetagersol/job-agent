@@ -152,11 +152,13 @@ def t_lanzar_busqueda():
     return {"ok": True, "aviso": "Búsqueda en marcha; tarda unos minutos. Los resultados aparecerán en la app."}
 
 
-def t_generar_cv(id):
+def t_generar_cv(id, descripcion=""):
     ok, motivo = cv_ia.disponibilidad()
     c = next((x for x in datos.candidaturas() if x["id"] == id), None)
     if c is None:
         raise KeyError(f"No existe la candidatura {id}")
+    if descripcion.strip():  # la descripción que ha pegado en el chat: se guarda y se usa para el CV
+        c = datos.actualizar_candidatura(id, tocar_fecha=False, descripcion=descripcion.strip())
     if ok:
         ok, motivo = datos.puede_generar_cv(c)
     if not ok:
@@ -259,8 +261,9 @@ HERRAMIENTAS = [
            "salario_minimo": {"type": "integer"}, "salario_objetivo": {"type": "integer"}, **_PREF})),
     ("lanzar_busqueda", t_lanzar_busqueda, "Lanza una búsqueda de ofertas nuevas (solo si la persona lo pide).", _obj({})),
     ("generar_cv", t_generar_cv,
-     "Genera un CV adaptado para una candidatura «Por aplicar» con enlace (solo si la persona lo pide expresamente).",
-     _obj({"id": _TXT}, ["id"])),
+     "Genera un CV optimizado para una candidatura «Por aplicar» (solo si la persona lo pide expresamente). No hace "
+     "falta enlace: si ha compartido la descripción del puesto en la conversación, pásala entera en «descripcion».",
+     _obj({"id": _TXT, "descripcion": _TXT}, ["id"])),
     ("investigar_oferta", t_investigar_oferta,
      "Investiga una oferta que ella ha visto por su cuenta y la analiza con su perfil (qué haría, por qué encaja y por "
      "qué no). Pasa el enlace si lo hay (los de LinkedIn no se pueden abrir: pide empresa y puesto), o empresa y "

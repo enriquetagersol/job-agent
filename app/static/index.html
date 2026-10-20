@@ -12,6 +12,7 @@
   <nav class="pestanas" role="tablist">
     <button role="tab" data-vista="candidaturas" class="activa">Mis candidaturas</button>
     <button role="tab" data-vista="ofertas">Ofertas <span class="insignia" id="ins-ofertas" hidden></span></button>
+    <button role="tab" data-vista="empresas">Empresas</button>
   </nav>
 </header>
 <div class="banda" id="banda" hidden></div>
@@ -32,6 +33,13 @@
       <button data-f="guardados">Te interesa</button>
     </div>
     <div class="lista-ofertas" id="lista-ofertas"></div>
+  </section>
+
+  <!-- EMPRESAS: qué hacen las empresas de tus candidaturas activas -->
+  <section id="vista-empresas" class="vista" hidden>
+    <div class="cabecera-vista"><h1>Empresas</h1></div>
+    <p class="sub">Qué hacen las empresas en las que tienes una candidatura por aplicar, aplicada, en entrevistas o con oferta. Pulsa un puesto para ver la candidatura.</p>
+    <div class="lista-empresas" id="lista-empresas"></div>
   </section>
 
   <!-- MIS CANDIDATURAS: tracker con resumen "Para hoy" -->

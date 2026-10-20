@@ -110,8 +110,8 @@ puedas respaldar con algo real. El campo "datos_extra" del maestro contiene dato
 Las marcas "(extra)" son contenido verdadero; quítales la marca.
 
 Proceso:
-1. Lee la oferta completa con la herramienta web_fetch (la URL va en el mensaje). Si no se puede leer, usa el \
-resumen de la oferta que se te da y dilo en las notas.
+1. Si el mensaje trae la descripción completa de la oferta, úsala. Si no, lee la oferta con la herramienta web_fetch \
+(la URL va en el mensaje). Si no hay ninguna de las dos o no se puede leer, usa el resumen que se te da y dilo en las notas.
 2. Identifica lo imprescindible, lo deseable, qué hará de verdad y qué tipo de persona buscan, con sus palabras.
 3. Para cada requisito busca la mejor evidencia real; lo que no tenga evidencia no se tapa: va a las notas como gap.
 4. Construye el CV:
@@ -145,9 +145,18 @@ def _sistema():
     ]
 
 
-def _mensaje_oferta(cand, oferta):
-    partes = [f"Adapta el CV a esta oferta.\n\nURL de la oferta: {cand['url']}",
-              f"Empresa: {cand['empresa']}\nPuesto: {cand['puesto']}"]
+def _mensaje_oferta(cand, oferta, url="", desc=""):
+    if desc:
+        cab = ("Adapta el CV a esta oferta. Tienes su descripción completa abajo: úsala en vez de buscarla."
+               + (f"\n\nEnlace (solo de referencia): {url}" if url else ""))
+    elif url:
+        cab = f"Adapta el CV a esta oferta.\n\nURL de la oferta: {url}"
+    else:
+        cab = ("Adapta el CV a esta oferta. No hay enlace ni descripción completa: básate en el resumen de la oferta "
+               "de abajo y dilo en las notas.")
+    partes = [cab, f"Empresa: {cand['empresa']}\nPuesto: {cand['puesto']}"]
+    if desc:
+        partes.append(f"<descripcion_de_la_oferta>\n{desc[:30000]}\n</descripcion_de_la_oferta>")
     if oferta:
         s = oferta.get("sencillo") or {}
         resumen = {k: v for k, v in {"datos": oferta.get("datos"), "empresa": oferta.get("empresa_desc"),
@@ -228,14 +237,15 @@ def generar(cid):
     """Genera el CV para la candidatura `cid`. Pensado para ejecutarse en un hilo."""
     import anthropic
     cand = next(c for c in datos.candidaturas() if c["id"] == cid)
-    oferta = next((o for o in datos.ofertas() if o["id"] == cand.get("oferta_id")), None)
+    url, desc, oferta = datos.info_oferta(cand)
+    web = bool(url) and not desc  # con la descripción no hace falta abrir la página
     inicio = _dt.datetime.now().isoformat(timespec="seconds")
     datos.actualizar_candidatura(cid, cv_trabajo={"estado": "generando", "inicio": inicio, "mensaje": ""},
                                  tocar_fecha=False)
     try:
         cliente = anthropic.Anthropic(api_key=_api_key(), max_retries=3)
-        mensajes = [{"role": "user", "content": _mensaje_oferta(cand, oferta)}]
-        res, resp, uso = _llamar(cliente, mensajes)
+        mensajes = [{"role": "user", "content": _mensaje_oferta(cand, oferta, url, desc)}]
+        res, resp, uso = _llamar(cliente, mensajes, web=web)
 
         carpeta = os.path.join(DIR_ADAPTADOS, f"{datos.hoy()}_{_slug(cand['empresa'], 25)}_{_slug(cand['puesto'])}")
         os.makedirs(carpeta, exist_ok=True)
@@ -250,7 +260,7 @@ def generar(cid):
                                    {"role": "user", "content": "El CV no cabe en una página A4. Recórtalo "
                                     "quitando los bullets y proyectos menos relevantes para esta oferta, sin "
                                     "cambiar nada más. Devuelve el resultado completo con el mismo formato."}]
-            res, resp, uso2 = _llamar(cliente, mensajes)
+            res, resp, uso2 = _llamar(cliente, mensajes, web=web)
             uso = {k: uso[k] + uso2[k] for k in uso}
             json.dump(res["cv"], open(ruta_json, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
             cabe = _render(ruta_json, ruta_pdf)
@@ -264,8 +274,8 @@ def generar(cid):
                       "perfil. Comprueba que son correctas o quítalas: " + ", ".join(dudosas))
         if not cabe:
             notas += "\n\n## ⚠️ Longitud\nEl CV ocupa más de una página. Pide otro o recórtalo a mano."
-        cabecera = (f"# CV para {cand['puesto']} — {cand['empresa']}\nOferta: {cand['url']} · Generado: "
-                    f"{datos.hoy()}\n\n")
+        cabecera = (f"# CV para {cand['puesto']} — {cand['empresa']}\nOferta: {url or 'descripción pegada (sin enlace)'} · "
+                    f"Generado: {datos.hoy()}\n\n")
         open(os.path.join(carpeta, "notas.md"), "w", encoding="utf-8").write(cabecera + notas)
 
         rel_pdf = os.path.relpath(ruta_pdf, datos.RAIZ)

@@ -31,6 +31,7 @@ import preferencias_ia  # noqa: E402
 import perfil_ia  # noqa: E402
 import sugerencias_ia  # noqa: E402
 import aprendizaje_ia  # noqa: E402
+import fichas_empresas  # noqa: E402
 
 ESTATICOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 ARCHIVOS_PERMITIDOS = [os.path.join(datos.RAIZ, "cv"), os.path.join(datos.RAIZ, "resultados")]
@@ -98,7 +99,7 @@ class Manejador(BaseHTTPRequestHandler):
             correo = datos._leer(os.path.join(datos.DIR_DATOS, "correo_estado.json"), {})
             return self._json(200, {**datos.estado_completo(), "ia": {"disponible": ok, "motivo": motivo},
                                     "perfil": perfil_ia.estado(), "aviso_correo": correo.get("ofertas_correo", {}),
-                                    "cv_general": cv_ia.estado_general()})
+                                    "cv_general": cv_ia.estado_general(), "empresas": fichas_empresas.para_la_app()})
         if ruta.startswith("/archivo/"):
             destino = os.path.realpath(os.path.join(datos.RAIZ, unquote(ruta[len("/archivo/"):])))
             if not any(destino.startswith(os.path.realpath(p) + os.sep) for p in ARCHIVOS_PERMITIDOS):
@@ -124,8 +125,9 @@ class Manejador(BaseHTTPRequestHandler):
                 b = self._cuerpo()
                 if not b.get("empresa") or not b.get("puesto"):
                     raise ValueError("empresa y puesto son obligatorios")
-                return datos.crear_candidatura(b.pop("empresa"), b.pop("puesto"),
-                                               b.pop("estado", "por_aplicar"), **b)
+                c = datos.crear_candidatura(b.pop("empresa"), b.pop("puesto"), b.pop("estado", "por_aplicar"), **b)
+                fichas_empresas.completar_en_segundo_plano()
+                return c
             return self._escritura(crear)
         if p == ["api", "candidaturas", "orden"]:
             def ordenar():
@@ -183,6 +185,7 @@ class Manejador(BaseHTTPRequestHandler):
                 b = self._cuerpo()
                 o = datos.decidir_oferta(p[2], b.get("valor"), b.get("motivo", ""))
                 aprendizaje_ia.programar()  # aprende de la decisión (y su motivo) en un minuto
+                fichas_empresas.completar_en_segundo_plano()
                 return o
             return self._escritura(decidir)
         return self._json(404, {"error": "no encontrado"})
@@ -198,6 +201,8 @@ class Manejador(BaseHTTPRequestHandler):
                                                  corregir_fecha_novedad=corregir, **b)
                 if sugerencias_ia.hay_novedad(b, nota):
                     sugerencias_ia.sugerir_en_segundo_plano(p[2])
+                if b.get("estado"):
+                    fichas_empresas.completar_en_segundo_plano()
                 return c
             return self._escritura(act)
         return self._json(404, {"error": "no encontrado"})
@@ -244,7 +249,8 @@ def main():
     # Deja cargado el SDK de Claude para que la primera sugerencia no tarde
     threading.Thread(target=lambda: __import__("anthropic"), daemon=True).start()
     import correo_ia
-    correo_ia.vigilar(intervalo=120)  # con Gmail conectado: procesa cada correo nuevo al llegar (mira cada 2 min)
+    correo_ia.vigilar(intervalo=120)
+    fichas_empresas.vigilar()  # fichas de las empresas de sus candidaturas activas (pestaña Empresas)  # con Gmail conectado: procesa cada correo nuevo al llegar (mira cada 2 min)
     if a.abrir:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:
