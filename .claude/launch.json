@@ -1,0 +1,16 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "job-agent",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": [
+        "-I",
+        "app/servidor.py",
+        "--puerto",
+        "8765"
+      ],
+      "port": 8765
+    }
+  ]
+}

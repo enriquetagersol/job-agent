@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Agent</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="barra">
+  <div class="marca">Job Agent</div>
+  <nav class="pestanas" role="tablist">
+    <button role="tab" data-vista="candidaturas" class="activa">Mis candidaturas</button>
+    <button role="tab" data-vista="ofertas">Ofertas <span class="insignia" id="ins-ofertas" hidden></span></button>
+  </nav>
+</header>
+<div class="banda" id="banda" hidden></div>
+
+<main>
+  <!-- OFERTAS -->
+  <section id="vista-ofertas" class="vista" hidden>
+    <div class="cabecera-vista">
+      <h1>Ofertas</h1>
+      <div class="acciones">
+        <button id="btn-cv-perfil" title="Tu CV y tu perfil">📄 Mi CV</button>
+        <button id="btn-pref" title="Tus preferencias de búsqueda">⚙︎ Preferencias</button>
+        <button class="primario" id="btn-buscar">🔍 Buscar ofertas</button>
+      </div>
+    </div>
+    <div class="segmentado" id="filtro-ofertas">
+      <button data-f="resultados" class="activa">Resultados de búsqueda</button>
+      <button data-f="guardados">Guardadas</button>
+    </div>
+    <div class="lista-ofertas" id="lista-ofertas"></div>
+  </section>
+
+  <!-- MIS CANDIDATURAS: tracker con resumen "Para hoy" -->
+  <section id="vista-candidaturas" class="vista">
+    <div class="cabecera-vista">
+      <h1>Mis candidaturas</h1>
+      <button id="btn-nueva">+ Añadir candidatura</button>
+    </div>
+    <div class="bienvenida" id="bienvenida" hidden></div>
+    <div class="resumen-hoy" id="para-hoy"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="panel"><h2>Candidaturas por etapa</h2><p class="sub">Cuántas hay en cada etapa</p><div class="embudo" id="embudo"></div></div>
+    <div class="panel">
+      <h2>Situación</h2><p class="sub">Pulsa una candidatura para ver su detalle o apuntar una novedad. Arrastra ⠿ para ordenarlas por prioridad.</p>
+      <div class="tabla-envoltorio"><table class="tabla" id="tabla-cand">
+        <thead><tr><th class="asa-col" aria-label="Prioridad"></th><th>Empresa</th><th>Puesto</th><th>Etapa</th><th>Última novedad</th><th>Próximo paso</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </section>
+</main>
+
+<!-- Detalle de candidatura -->
+<aside class="cajon" id="cajon" hidden aria-label="Detalle de candidatura">
+  <div class="cajon-cab">
+    <div><h2 id="cajon-titulo"></h2><div class="sub" id="cajon-sub"></div></div>
+    <button class="icono" id="cajon-cerrar" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="etapas" id="cajon-etapas" role="group" aria-label="Etapa"></div>
+  <form id="form-cand" class="form">
+    <fieldset class="proximo">
+      <legend>Última novedad <span class="sugerido" id="cajon-nov-origen" hidden></span></legend>
+      <div class="fila2">
+        <input name="novedad_texto" placeholder="¿Qué ha pasado? (follow-up, entrevista, feedback…)" aria-label="Última novedad">
+        <input type="date" name="novedad_fecha" aria-label="Fecha de la novedad" title="¿Cuándo pasó?">
+      </div>
+      <p class="pista-campo">Si escribes algo nuevo se añade al historial.</p>
+    </fieldset>
+    <fieldset class="proximo">
+      <legend>Próximo paso <span class="sugerido" id="cajon-sugerido" hidden>💡 sugerido por Job Agent</span></legend>
+      <div class="fila2">
+        <input name="proximo_texto" placeholder="p. ej. follow-up al recruiter" aria-label="Próximo paso">
+        <input type="date" name="proximo_fecha" aria-label="Fecha del próximo paso">
+      </div>
+    </fieldset>
+    <button type="submit" class="primario">Guardar</button>
+  </form>
+  <div class="bloque-cv" id="cajon-cv" hidden></div>
+  <div class="historia">
+    <h3>Historial</h3>
+    <ol id="eventos"></ol>
+  </div>
+</aside>
+<div class="velo" id="velo" hidden></div>
+
+<!-- ¿Por qué? (opcional) -->
+<dialog id="dlg-motivo">
+  <form method="dialog" class="form">
+    <h2 id="motivo-titulo"></h2>
+    <p class="sub">Opcional: ayuda a que las próximas búsquedas se ajusten más a ti.</p>
+    <div class="opciones" id="motivo-opciones"></div>
+    <textarea id="motivo-texto" rows="2" placeholder="Otro motivo (opcional)"></textarea>
+    <div class="botones">
+      <button value="omitir">Omitir</button>
+      <button value="ok" class="primario">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Mi CV -->
+<dialog id="dlg-cv">
+  <form method="dialog" class="form">
+    <h2>Tu CV</h2>
+    <div id="cv-info"></div>
+    <input type="file" id="cv-archivo" accept=".pdf,.docx,.txt,.md,application/pdf" hidden>
+    <div class="botones">
+      <button value="cerrar">Cerrar</button>
+      <button type="button" class="primario" id="cv-subir">Subir nuevo CV</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Lanzar búsqueda -->
+<dialog id="dlg-buscar">
+  <form method="dialog" class="form">
+    <h2>Buscar ofertas nuevas</h2>
+    <p>Buscaré en las webs de empleo de unas 145 empresas tecnológicas los puestos de tus preferencias, y
+      Claude analizará hasta <strong>25 ofertas nuevas</strong> con tu perfil. Las que encajen aparecerán en
+      <em>Ofertas → Resultados de búsqueda</em>.</p>
+    <p class="sub">Tarda unos minutos y puedes seguir usando la app mientras tanto.</p>
+    <p class="err" id="buscar-aviso" hidden></p>
+    <div class="botones">
+      <button value="cancelar">Cancelar</button>
+      <button value="ok" class="primario" id="buscar-ok">Buscar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Preferencias -->
+<dialog id="dlg-pref" class="ancho">
+  <form method="dialog" class="form" id="form-pref">
+    <h2>Tus preferencias</h2>
+    <p class="sub">Lo que pongas aquí es lo que usará la próxima búsqueda.</p>
+    <div class="campo-chips" data-k="puestos"><label>Puestos que busco</label></div>
+    <div class="fila2">
+      <div class="campo-chips" data-k="ubicaciones"><label>Dónde quiero trabajar</label></div>
+      <div class="campo-chips" data-k="mudarme_a"><label>Me mudaría a</label></div>
+    </div>
+    <div class="fila3">
+      <label>Modalidad<select name="modalidad"><option>Híbrido</option><option>Remoto</option><option>Presencial</option><option>Me da igual</option></select></label>
+      <label>Salario mínimo (€)<input name="salario_minimo" type="number" step="1000" min="0"></label>
+      <label>Salario objetivo (€)<input name="salario_objetivo" type="number" step="1000" min="0"></label>
+    </div>
+    <div class="campo-nl" data-k="sectores" data-ej="p. ej. me gustan las empresas de IA y las fintech"><label>Sectores o empresas que me atraen</label></div>
+    <div class="campo-nl" data-k="valoro" data-ej="p. ej. quiero decidir y ver que lo que hago se usa"><label>Lo que más valoro</label></div>
+    <div class="campo-nl" data-k="evitar" data-ej="p. ej. no quiero pasarme la vida viajando"><label>Lo que prefiero evitar</label></div>
+    <div class="campo-nl" data-k="descarto" data-ej="p. ej. nada de consultoras ni de vender con cuota"><label>Descarto siempre</label></div>
+    <div class="botones">
+      <button value="cancelar" formnovalidate>Cancelar</button>
+      <button value="ok" class="primario">Guardar preferencias</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Alta rápida -->
+<dialog id="dlg-nueva">
+  <form method="dialog" id="form-nueva" class="form">
+    <h2>Añadir candidatura</h2>
+    <label>Empresa<input name="empresa" required></label>
+    <label>Puesto<input name="puesto" required></label>
+    <label>Enlace a la oferta (opcional)<input name="url" type="url" placeholder="https://"></label>
+    <label>¿En qué punto está?
+      <select name="estado">
+        <option value="por_aplicar">Por aplicar</option>
+        <option value="enviada">Ya la he enviado</option>
+        <option value="en_proceso">Estoy en entrevistas</option>
+      </select>
+    </label>
+    <div class="botones">
+      <button value="cancelar" formnovalidate>Cancelar</button>
+      <button value="ok" class="primario">Añadir</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,10 +1,23 @@
-/perfil.json
-/.env
-/.venv/
+# --- Secretos: nunca se suben ---
+.env
+.env.*
+!.env.example
+
+# --- Tus datos personales: nunca se suben (se generan con /perfil, /preferencias, la app...) ---
+cv/*
+!cv/.gitkeep
+perfil/*
+!perfil/.gitkeep
+datos/*
+!datos/.gitkeep
+resultados/*
+!resultados/.gitkeep
+# Migración puntual con datos de candidaturas concretas
+herramientas/migrar_a_json.py
+
+# --- Entorno y temporales ---
+.venv/
 __pycache__/
-/.datos/
-/perfil.tmp
-/user_profile.json
-/user_profile.tmp
-/.local_data/
-*.pdf
+*.pyc
+.DS_Store
+.claude/settings.local.json

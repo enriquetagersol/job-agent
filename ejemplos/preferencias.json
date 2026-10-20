@@ -1,0 +1,14 @@
+{
+ "puestos": ["Solutions Engineer", "Product Manager", "Strategy & Operations"],
+ "ubicaciones": ["Madrid", "Remoto desde España"],
+ "mudarme_a": [],
+ "modalidad": "Híbrido",
+ "salario_minimo": 35000,
+ "salario_objetivo": 45000,
+ "sectores": ["SaaS B2B", "IA"],
+ "valoro": ["Ownership", "Aprendizaje técnico"],
+ "evitar": ["Muchos viajes"],
+ "descarto": ["Consultoras", "Prácticas o becas"],
+ "frases": {},
+ "actualizado": ""
+}

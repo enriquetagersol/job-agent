@@ -1,244 +1,188 @@
-# job-agent
+# Job Agent
 
-A job-search application that compares vacancies with the user's career history and preferences, explains why they may be interesting, and supports application tracking.
+Agente de búsqueda de empleo que funciona dentro de Claude Code, con una **app local** para ver y
+gestionar tus candidaturas. El agente lee tu CV, aprende qué buscas, busca ofertas, lee cada
+descripción completa y te recomienda las de mayor encaje. La app te deja seguir el progreso de
+tus candidaturas y decidir sobre las ofertas.
 
-Currently a **local Python and Streamlit prototype for one user**, with JSON file persistence. It has no database or multi-user accounts. The interface remains in Spanish.
+## Instalación
 
-## First-version scope
+Requisitos: Python 3.9+ y Google Chrome (para generar los CVs en PDF). Para el agente, Claude Code.
 
-1. **User profile:** personal details, career history and preferences, with optional CV input.
-2. **Real vacancy search:** find publications and retrieve their descriptions for analysis.
-3. **Explained, prioritized recommendations:** distinguish interest, matches, confirmed gaps and missing information.
-4. **A personalized CV for each vacancy:** generate a reviewable, downloadable PDF using confirmed information only.
-5. **“He aplicado” registration:** record an application made by the user and the exact CV used, when applicable.
-6. **Application tracker:** view and update statuses, notes and next steps.
+1. Descarga o clona el proyecto.
+2. **Mac:** doble clic en `Abrir Job Agent.command`. La primera vez crea el entorno `.venv` e
+   instala las dependencias (`requirements.txt`). **Otros sistemas:**
+   `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -I app/servidor.py --abrir`
+3. **API key de Claude** (para buscar ofertas, crear CVs y traducir preferencias desde la app).
+   Consíguela en platform.claude.com → API Keys. La app la busca en este orden:
+   1. la variable de entorno `ANTHROPIC_API_KEY`;
+   2. un archivo `.env` en la raíz del proyecto (copia `.env.example`);
+   3. el Llavero de macOS (doble clic en `Configurar API key.command`). Es la opción más segura en Mac.
+4. Abre la app: si no hay perfil, verás «Bienvenida»; sube tu CV con **📄 Mi CV** y define tus
+   preferencias en **⚙︎ Preferencias**. (También puedes hacerlo con Claude Code: `/perfil` y `/preferencias`.)
+   En `ejemplos/` tienes el formato de `cv_maestro.json` y `preferencias.json`.
 
-These six items describe the target scope, not a claim that everything has been implemented or validated. The complementary base CV **does not replace a CV personalized for a vacancy**.
+### Subirlo a GitHub
+- `.gitignore` deja fuera **la clave** (`.env`) y **todos tus datos personales**: `cv/`, `perfil/`,
+  `datos/` y `resultados/` (CV, perfil, preferencias, candidaturas, contactos, informes), además
+  de `.venv/`. Solo se sube el código, los comandos del agente, la documentación y los ejemplos.
+- Nunca pongas la clave en el código ni en ningún archivo que no sea `.env`.
+- Si la carpeta del proyecto se sincroniza con iCloud o Dropbox, un `.env` se sincroniza en texto
+  plano: en Mac usa el Llavero.
+- Recomendado: repositorio **privado**.
 
-## Current status
+## La app
 
-### Implemented
+**Abrir:** doble clic en `Abrir Job Agent.command`, o `.venv/bin/python -I app/servidor.py --abrir`.
+Se abre en `http://127.0.0.1:8765`, solo en tu Mac. Para cerrarla, cierra la ventana de Terminal.
 
-- Profile tabs: “Datos personales”, “Trayectoria profesional” and “Preferencias de búsqueda”, with individual and full-profile editing, saving and cancellation.
-- Editable and removable work experience, education and projects; confirmed skills and declared language levels.
-- Required-field and date validation. Incomplete legacy entries remain available for correction.
-- One confirmed skill list shared by search, evaluation and CV generation; explicit acceptance of AI suggestions, duplicate checks, deletion and confirmed merges.
-- OpenAI and Tavily search, description retrieval, deduplication and batches of up to five explained recommendations, with inspectable evidence.
-- Independent saved/discarded offer actions, reversible discard reasons, local replacement batches, and explicit adaptive priority rules with persistent history and user controls.
-- LLM conversational chat with explicit search requests, persistent company interests, undo/removal and results outside the conversation.
-- “Mejorar mi perfil”: general questions, answer confirmation and persistence, editing and deletion. “Actualizar recomendaciones” reevaluates existing listings.
-- Locally generated base CV PDF, with preview and download. There is currently no draft text editor in the interface.
-- Private persistence of profiles, evaluations, available sources and skill decisions; local diagnostics without keys or personal data.
+Dos pestañas:
 
-### Pending validation
+1. **Mis candidaturas** — un dashboard de solo lectura: **Para hoy** resumido en texto, tus
+   cifras (enviadas, % con respuesta, entrevistas, ofertas), las **candidaturas por etapa** y una
+   **tabla** con la situación de cada una: etapa, **última novedad** (qué pasó y cuándo) y
+   **próximo paso** 💡, que sugiere Job Agent cada vez que se apunta una novedad (en la app, por
+   Slack o al revisar el correo) y que puedes cambiar. Arrastra el asa ⠿ (o usa ↑/↓ sobre ella) para
+   ordenarlas por prioridad. Al pulsar una fila se abre su detalle, donde cambias la etapa, apuntas
+   novedades con su fecha o creas su CV.
+2. **Ofertas** — aquí están **📄 Mi CV** (sube tu CV en PDF, DOCX o TXT: Claude lo analiza y genera tu
+   perfil y tu CV maestro; al subir uno nuevo se guarda copia de los anteriores en `perfil/historial/`),
+   **🔍 Buscar ofertas** (descarga ofertas de ~145 empresas y Claude
+   analiza hasta 25 nuevas; 5-10 min, ≈ 1-2 $) y **⚙︎ Preferencias** (puestos, dónde, salario; y
+   sectores, qué valoras, qué evitas y qué descartas, que escribes con tus palabras y se convierten
+   en etiquetas fijas). Debajo, *Resultados de búsqueda* y *Guardadas*: cada oferta dice **qué
+   harías, por qué encaja y por qué no encaja**; pulsas **👍 Me interesa** o **👎 No me interesa** y
+   una ventana te pregunta el porqué (opcional). *Guardadas* son las que te interesan y aún no has
+   enviado; las que no te interesan desaparecen.
 
-**The progressive profile-improvement flow has not yet been tested end to end.** Real-use validation must cover questions, confirmed answers, reopening the application and reevaluation with the enriched profile without another web search.
+**CV adaptado desde la app:** Claude lee la oferta y adapta tu CV maestro sin inventar nada; en
+1-3 minutos tienes el PDF de una página y unas notas con lo que valoran, los cambios, lo que te
+falta y las cifras que debes comprobar. Usa tu API key de Claude (≈ 0,2-0,5 $ por CV con Claude
+Opus 5.5), igual que la búsqueda. **Primera vez:** doble clic en `Configurar API key.command` para guardarla en el
+Llavero de macOS (no queda en ningún archivo).
 
-Explanation quality, skill-suggestion relevance, retrieval from different employment sites, and CV preview/download across the browsers used also require ongoing validation.
+## El agente (en Claude Code, dentro de esta carpeta)
 
-Automated tests cover rules, persistence and interactions. Mocked services do not establish that the full flow works with real services. Occasional real searches and visual PDF checks with fictional data have been performed. **Implemented does not mean validated end to end.**
+1. Deja tu CV en `cv/`.
+2. `/perfil`: analiza el CV y genera `perfil/perfil.md` y `cv/cv_maestro.json`.
+3. `/preferencias`: entrevista sobre lo que buscas y genera `perfil/preferencias.md`.
+4. `/buscar`: busca, analiza y puntúa ofertas. Escribe el informe en `resultados/` y las ofertas
+   aparecen en la app. Admite un foco: `/buscar solo remoto`, `/buscar fintech`.
+5. `/revisar`: decide oferta a oferta en el chat y **aprende** de tus decisiones (también de las
+   que tomes en la app), proponiéndote ajustes de preferencias.
+6. `/adaptar-cv <oferta>`: solo cuando lo pidas, genera un CV de una página ajustado a la oferta,
+   sin inventar nada, y lo enlaza en la candidatura.
 
-### Pending implementation
+También puedes contarle al agente novedades ("me han llamado de Acme", "me han rechazado en Globex") y
+actualizará la candidatura.
 
-- Optional CV input for the profile.
-- Per-vacancy personalized CV, “He aplicado” registration and tracker, in the order below.
-- Later-stage features: database, multi-user accounts, daily searches, application submission and visual CV templates.
+## Hablar con el agente por Slack
 
-## Profile and career history
+Puedes escribirle a **Job Agent** por mensaje directo en Slack (o mencionarlo con `@Job Agent` en un
+canal; responde en hilo). Te cuenta cómo van tus candidaturas, apunta novedades («me han llamado de
+Acme para entrevista el 28»), te enseña ofertas y registra si te interesan, cambia preferencias,
+lanza búsquedas y genera CVs adaptados si se lo pides. Usa la misma API key y los mismos datos que la
+app. Escribe `olvida` para empezar una conversación de cero.
 
-The profile includes:
+Funciona en *Socket Mode*: no necesita servidor público, pero **solo responde mientras la app esté
+abierta en tu Mac**. Solo te contesta a ti (tu Member ID); a cualquier otra persona le dice que es privado.
 
-- **Personal details:** first name, surname, phone, email and LinkedIn. Contact details alone do not enable search.
-- **Work experience:** company, role, dates, responsibilities and optional achievements/tools. Multiple jobs are supported, including past employment.
-- **Education:** institution, studies, courses or certifications, dates and optional learning content/projects.
-- **Projects:** name, description, personal contribution, tools and an optional URL.
-- **Skills and languages:** a single confirmed skill list and declared language levels.
-- **Search preferences:** target roles, locations, work arrangements, minimum gross annual salary, preferences, importance and “¿Qué buscas?”. The current employer can optionally be excluded; users with multiple current jobs can choose which employer to exclude.
+Configuración (una vez, ~5 minutos):
 
-Each field or block has its own “Guardar” and “Cancelar” editor. Work experience, education and projects have individual entry editors. Saving one block preserves other data; cancelling retains the previous value. Editing and saving do not initiate search or model calls.
+1. En https://api.slack.com/apps → **Create New App** → **From a manifest**, elige tu workspace y
+   pega el contenido de `slack/manifest.json`.
+2. **Basic Information → App-Level Tokens → Generate**, con el permiso `connections:write`
+   (token `xapp-…`).
+3. **Install App → Install to Workspace** y copia el **Bot User OAuth Token** (`xoxb-…`).
+4. Doble clic en **`Configurar Slack.command`** y pega los dos tokens y tu Member ID
+   (tu perfil de Slack → ⋮ → *Copy member ID*). Se guardan en el Llavero, no en archivos.
+   (En otros sistemas: `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` y `SLACK_USUARIO` en `.env`.)
+5. Cierra y vuelve a abrir Job Agent. En la consola verás «Slack: conectado».
 
-Work experience requires a company, role, start date and responsibilities. Education requires an institution, study title and start date. Both require an end date unless ongoing, and reject inconsistent dates. Legacy experience-year ranges are never converted into invented jobs.
+### Que revise tu correo desde Slack
 
-Manually added skills are confirmed. AI suggestions become confirmed only when accepted, and their names can be edited before acceptance. Case and whitespace duplicates are prevented; possible equivalents merge only after confirmation. The limit is **10 confirmed skills**, excluding pending suggestions. Any confirmed skill can be removed while its sources remain internally recorded. Discarded or removed skills must not be suggested again from the same evidence.
+Escríbele «revisa mi correo» y leerá los correos nuevos de tu etiqueta **JOB SEARCH** de Gmail y
+actualizará tus candidaturas (entrevistas, rechazos, ofertas, peticiones con plazo). Usa la API de
+Gmail con permiso de **solo lectura** (`gmail.readonly`): no puede enviar, borrar ni cambiar nada.
+Comparte con la tarea diaria de las 9:00 la marca de «última revisión» (`datos/correo_estado.json`),
+así que ninguna de las dos repite correos ya revisados.
 
-“Proponer skills” appears in the skill summary and requires saved descriptions of tasks, knowledge or tools. Clicking it explicitly starts the model call. Study titles alone do not establish specific skills. Learning in education, application in projects and professional work are distinguished: completing a course does not establish advanced proficiency or work experience.
+Conexión (una vez):
 
-## Progressive profile improvement
+1. En https://console.cloud.google.com, con tu proyecto: **APIs y servicios → Biblioteca → Gmail
+   API → Habilitar**.
+2. **Google Auth Platform** (pantalla de consentimiento): tipo *Externo*; en **Público** añade tu
+   Gmail como usuario de prueba. Si la dejas en modo *Prueba*, Google caduca el permiso cada 7 días;
+   pulsa **Publicar app** para evitarlo (al autorizar verás «app no verificada»: es tuya, continúa).
+3. **Clientes → Crear cliente → App de escritorio** → **Descargar JSON** (déjalo en Descargas).
+4. Doble clic en **`Conectar Gmail.command`**: abre el navegador para autorizar y prueba la lectura.
+   El cliente y el token quedan en el Llavero; puedes borrar el JSON de Descargas.
 
-“Mejorar mi perfil” groups up to three relevant, deduplicated general questions outside vacancy cards. The user may answer or skip them. Before saving an answer, the proposed information is displayed for confirmation.
+El historial de las conversaciones se guarda en `datos/chat.json` (últimos mensajes; no se sube a GitHub).
 
-Confirmed answers enrich the profile, persist between sessions and can be reviewed, edited or removed. Already answered or documented information should not be requested again. This persistence is **stored user information, not model training**.
+## Correo (Gmail) y avisos
 
-Questions about the user are separated from vacancy-specific uncertainties, such as undocumented salary, requirements or whether the vacancy remains active. Vacancy questions stay in the corresponding card.
+Con el conector de Gmail activo, el agente lee **solo** la etiqueta «JOB SEARCH» (y solo para leer:
+nunca envía ni borra nada) para completar tus candidaturas: fechas reales, contactos, fases y
+feedback. Una tarea programada, **«job-agent-avisos-correo», todos los días a las 9:00**, revisa
+los correos nuevos de esa etiqueta, actualiza el tracker y te envía una notificación solo si hay
+entrevista, oferta, rechazo o una petición con plazo. Funciona mientras la app de Claude esté
+abierta (si estaba cerrada, se ejecuta al abrirla). Puedes cambiarla o pausarla en la sección
+*Scheduled* de la barra lateral.
 
-“Actualizar recomendaciones” calls the model to reevaluate existing vacancies using the updated profile and locally stored descriptions, **without another web search or Tavily extraction**. Some legacy results retain only verified excerpts: reevaluation is limited to that evidence and does not fill gaps with assumptions. The complete flow remains pending end-to-end validation.
+## Cómo puntúa
 
-## Search and recommendations
+Primero aplica tus *dealbreakers*. Después puntúa de 0 a 100 con los pesos de
+`perfil/preferencias.md` (requisitos técnicos, experiencia, funciones, preferencias y
+condiciones), más las *señales aprendidas* de tus decisiones. Detalle en [CLAUDE.md](CLAUDE.md).
 
-Only explicit search buttons (“Buscar ofertas” or “Buscar más ofertas”) or an explicit chat search request trigger a new search. At least one meaningful saved item in career history or search preferences is sufficient; a target role is not mandatory. Contact details, defaults, empty entries and selectors without an explicit choice are insufficient. Partial profiles can search without inventing missing criteria.
+## Estructura
 
-The agent loads `agent_instructions.md`, uses tool calling and limits each search to **ten search/extraction tool calls**. It prioritizes original company publications or their recruitment systems; job boards help discover vacancies. Evaluation requires a retrieved description with responsibilities and requirements, rather than only titles or search snippets. Pages without sufficient evidence are discarded, duplicates removed, and results never invented to reach five.
-
-The interface does not show a 1–10 fit score or a global suitability label. Python retains preference-based ordering using dimensions evaluated by the model with evidence: role relevance, skills, experience, languages, location, work arrangement and salary.
-
-Each vacancy shows company, role, location, URL and explanations of:
-
-- Reasons for interest, separate from qualifications.
-- Requirements met and partial matches.
-- Confirmed gaps.
-- Vacancy information still needing confirmation.
-
-Evidence is available under “Ver detalles”. Declaring a skill does not confirm proficiency or professional experience. “¿Qué buscas?” guides interest without becoming confirmed capability. Missing information is not a failure: it appears as “No documentado” or an internal vacancy question; user questions appear in “Mejorar mi perfil”. If vacancy activity cannot be confirmed, that uncertainty is stated.
-
-Preferences prioritize opportunities rather than automatically excluding them. Mandatory conditions and additional filters are no longer part of the interface or evaluation flow. Salaries in different currencies are not compared without reliable conversion, and annual pay is not inferred when necessary information is missing.
-
-## Directed-search chat and company interests
-
-The chat opens from a circular chatbot button fixed at the bottom right. Its overlay panel includes a scrollable conversation, a close button and an inline input supporting Enter or the send button. Opening and closing preserve messages within the Streamlit session and never trigger API calls. Submissions use Streamlit’s native chat input; rerenders do not resend them. The panel adapts to narrow screens, and “Escribiendo…” indicates processing. Job cards remain on the main page.
-
-The Spanish chat now uses the configured OpenAI model through the Responses API for natural-language understanding and replies. The old regular-expression command parser has been removed. Every submitted message can consume API calls; opening, closing or rerendering the panel does not. The model sees the session conversation, confirmed career profile (without the contact-data section), effective priorities and current available cards with saved evaluations. It can discuss goals, explain recommendations, compare available opportunities and ask clarifying questions without initiating a web search.
-
-Six tool-calling functions are available: `get_recommendations`, `search_jobs`, `add_company_interest`, `remove_company_interest`, `remember_search_preference` and `forget_search_preference`. Python validates strict typed arguments and a nonempty user turn; the LLM resolves intent and ambiguity from the conversation, executes only known actions, returns success/failure to the model, and suppresses repeated identical actions within a turn. Search is queued through the existing search/evaluation pipeline, retaining its ten-call Tavily limit; a queued search is not reported as completed. Tool schemas no longer require a literal quotation: accents, paraphrases and contextual affirmations do not fail a text-equality check. Local `chat_diagnostics.json` retains only allowlisted tool names, result codes and exception categories, never messages, profiles, arguments or keys. The conversational loop is bounded to six model responses. No application, contact, CV adaptation or arbitrary profile-editing tools are exposed. Implementation follows the [official function-calling guide](https://developers.openai.com/api/docs/guides/function-calling).
-
-An explicit lasting interest such as “Me interesaría trabajar en Salesforce” can be saved by the corresponding tool. The assistant can then offer a search; “Sí, pero solo en Madrid” is interpreted using the previous conversation. Company and location restrictions apply only to that request. Python excludes results whose documented employer/location do not match those temporary constraints; unknown locations are not assumed compatible. Ordinary searches remain unrestricted by remembered company interests. A one-off search does not itself authorize a lasting company preference, and ambiguous intent must prompt clarification.
-
-The profile’s “Empresas de interés” controls and chat tools share the same persistent, case/whitespace-deduplicated list. A compact undo action is attached to the relevant assistant message; it adds no separate notice panel and leaves the composer in place. Undo also adds a conversation update so subsequent replies know the preference was reverted. After recording interest, the assistant is instructed to offer a relevant next conversational step without starting a search automatically. Conversation history stays in the Streamlit session, separately from persistent profile facts and confirmed answers. Undo affects only the changed company and preserves unrelated profile data. No conversation statement automatically establishes professional experience or skills.
-
-Evaluation prompts now ask for concise, task-based connections with aspirations, career history and preferences, separately from demonstrated qualifications. Python preserves a responsibility-grounded reason when a title matches, instead of overwriting it with a generic title comparison. Interest may use documented career activities, but a title or aspiration never establishes professional proficiency. Explicit company-interest explanations remain separate from qualification claims. Legacy technical comparison blocks and verbatim evidence-only reasons are kept out of the main explanation; evidence remains available under “Ver detalles”. Missing user information is routed to “Mejorar mi perfil”, while vacancy uncertainties stay private in the saved evaluations.
-
-Retrieved descriptions and company names are passed as data, not instructions. Evaluation prompts explicitly reject embedded instructions or requests to take actions. This boundary is covered by simulated payload tests; resistance of a real model to all prompt-injection attempts is not established by these tests.
-
-### Validation status
-
-**Implemented and checked offline:** simulated natural-language tool decisions and contextual follow-ups, one-off versus durable preferences, duplicate prevention, persistence/undo/removal, directed search through simulated tool responses, employer filtering, ordinary-search scope reset, cards outside chat, and preservation of grounded explanations. All tests run with network access blocked; no real API calls were made for this feature.
-
-**Pending real-browser and real-service validation:** real-model understanding of equivalent expressions, typos and ambiguity, complete conversational usability, company-name aliases, original posting retrieval for specific employers, explanation quality and robustness against malicious page content. Existing saved explanations are not regenerated automatically; new searches or explicit “Actualizar recomendaciones” use the revised evaluation instructions. Neither unit tests nor AppTest simulations establish these complete flows as validated end to end.
-
-## Offer feedback and adaptive priorities
-
-Each recommendation has independent “Guardar” and “Descartar” actions. Saving never means the user applied. Both actions are reversible; saved and discarded titles can be consulted in their dedicated tabs, including after reopening the app or replacing search results. Legacy interest data remains stored internally.
-
-Discarding optionally records location, work arrangement, salary, responsibilities, company, seniority or another reason, a free-text comment, and the date with the evaluated vacancy. “Descartar sin indicar motivo” requires no explanation. A discarded publication is excluded from future recommendation batches until its discard is undone. This never excludes its entire company or role category. Vacancy identity reuses the evaluator’s exact normalized company/role/location grouping when all three are documented, including publications with different URLs. Otherwise it uses a canonical URL with tracking parameters and fragments removed, retaining vacancy identifiers in query parameters. This exact grouping is not a company/category exclusion. Identity remains a limitation: distinct openings with identical company, title and location may be grouped, while aliases with different undocumented details cannot always be recognized.
-
-Declared priorities remain in the profile. Effective priorities and feedback history are stored separately in the private `.local_data/offer_feedback.json` file. No profile facts, accepted destinations, work arrangements or minimum salary are changed by the rule.
-
-The provisional deterministic rule is:
-
-- **Three distinct discarded vacancies** with the same explicit location, work-arrangement or salary reason can raise that criterion one level: Baja → Media → Alta.
-- Only the explicit option “Este criterio pesa más para mí” counts. “Esta opción no me interesa”, missing reasons, other reasons and free-text comments do not create global-priority evidence.
-- Each signal is used once. Already used signals and repeated undo/discard cycles do not produce fresh evidence. No automatic decreases occur. An unspecified declared importance uses the existing Media default.
-- A new adjustment or a manual edit starts a fresh evidence period for that criterion. Individual preference saves override learned adjustments even if the declared importance is unchanged; full-profile saves reset only preference groups that changed. Unrelated profile edits preserve learned priorities.
-- The default threshold is `SIGNAL_THRESHOLD = 3` in `memory/offer_feedback.py`; it initializes the persisted `threshold` setting. Changing the setting in an existing private feedback file affects later actions only. It must be a positive integer. This is a provisional rule, not statistical inference or model training.
-
-After an adjustment, a brief dismissible notice offers “Deshacer”. Current priorities appear in the normal preference summaries and editors; manual edits override previous adjustments. Dismissing a notice persists without undoing the adjustment. Memory, separate declared/effective priorities and audit history remain internal; no permanent learning panel or technical labels are shown. Unrelated full-profile edits preserve adjusted priorities.
-
-Undoing a discard deactivates its signal and withdraws an active adjustment that depended on it. Undoing an adjustment does not reactivate consumed signals. Saved and interested actions do not affect weights in this implementation.
-
-“Mostrar otras ofertas” uses remaining locally evaluated candidates, excludes discarded vacancies and avoids repeated publications within the current batch sequence. When none remain, “Buscar más ofertas” offers an explicit external search; discarding never initiates one. Fewer than five valid candidates are shown as-is. Users can return to previous non-discarded batches. Older stored results may contain fewer candidates, so replacing offers cannot provide unevaluated vacancies without an explicit new search.
-
-Offline automated tests cover persistence, deduplication, batch replacement, explicit signal scope, threshold changes, ranking, manual overrides, correction and undo. Streamlit interaction tests use simulated search responses to verify feedback does not call APIs. Real-service end-to-end validation of this new flow remains pending.
-
-To run the offline checks:
-
-```bash
-.venv/bin/python run_tests.py
+```
+app/datos.py            capa de datos (única fuente de verdad), usada por app, CLI y futuras versiones
+app/servidor.py         servidor local + API JSON (solo Python estándar)
+app/cli.py              CLI de datos que usa el agente
+app/cv_ia.py            CV adaptado con la API de Claude (lo usa el botón de la app)
+app/busqueda_ia.py      búsqueda de ofertas con la API de Claude (botón Buscar ofertas)
+app/perfil_ia.py        análisis del CV subido con la API de Claude (botón Mi CV)
+app/empresas_ia.py      descripción de la empresa de cada oferta («La empresa»), con búsqueda web
+app/agente_chat.py      agente conversacional con herramientas sobre los datos (lo usa Slack)
+app/gmail_lector.py     lectura de la etiqueta JOB SEARCH con la API de Gmail (solo lectura)
+app/slack_bot.py        bot de Slack (Socket Mode); slack/manifest.json para crear la app
+perfil/preferencias.json  preferencias editables desde la app (mandan sobre preferencias.md)
+app/static/             interfaz (HTML/CSS/JS, sin build)
+datos/                  candidaturas.json y ofertas.json (tus datos)
+.claude/skills/         comandos /perfil /preferencias /buscar /revisar /adaptar-cv
+.claude/agents/         subagente analista-ofertas
+cv/                     tu CV, cv_maestro.json y adaptados/ (CVs por oferta)
+perfil/                 perfil y preferencias
+resultados/             informes de búsqueda (y archivo_md/: los .md antiguos)
+herramientas/           descarga de ofertas (Ashby, Greenhouse, Lever, Workable, Teamtailor, Recruitee,
+                        Personio; lista de empresas en empresas.json), render de CV a PDF
 ```
 
-The offline runner explicitly blocks network access. See [TESTING.md](TESTING.md) for the coverage boundaries, the replacement-batch regression fix, and the manual browser checklist. Automated unit/AppTest success is not an end-to-end validation claim.
+## Escalar a una app completa
 
-## Complementary base CV
+La app está separada en datos (`app/datos.py`), API (`app/servidor.py`) e interfaz
+(`app/static/`). Para que la propia app busque, analice y adapte CVs sin Claude Code:
 
-“Generar CV base” prepares a PDF draft from personal details and confirmed career history for preview and download. There is currently no editable text draft in the interface: corrections require editing the profile and regenerating the PDF.
+Ya están hechos el CV adaptado (`app/cv_ia.py`) y la búsqueda (`app/busqueda_ia.py`) con la API de Claude. Para lo demás, sigue el mismo patrón:
 
-It excludes salary, locations, work arrangements and search conditions, and never invents achievements, dates, titles or proficiency levels. The initial description may include professional-interest excerpts from “¿Qué buscas?”, identified as aspirations rather than acquired experience. This is the only use of that field in the base CV.
+1. Añade rutas a `app/servidor.py` (p. ej. `POST /api/carta` para una carta de presentación) que llamen
+   a la API de Claude con tu API key. Los prompts ya están escritos: son los `SKILL.md` de
+   `.claude/skills/` y el subagente `.claude/agents/analista-ofertas.md`.
+2. Reutiliza `herramientas/ats_fetch.py` (descarga de ofertas) y `herramientas/render_cv.py`
+   (PDF), y guarda los resultados con `app/datos.py`.
+3. Añade botones en la interfaz que llamen a esas rutas. Los datos y las vistas no cambian.
+4. Si la quieres en la nube o en el móvil, cambia el almacenamiento JSON por una base de datos
+   detrás de las mismas funciones de `app/datos.py` y añade autenticación.
 
-Generation requires first name and surname, a valid email and at least one complete experience, education or project entry. A complete project requires a name, description and personal contribution. Phone and links are optional. Incomplete entries remain in the profile but are omitted from the CV. A blocked CV does not prevent vacancy search.
+## Límites
 
-The PDF is generated locally in memory. It is not yet adapted to a vacancy and does not replace future personalized CV development. Visual templates are deferred.
+- Algunos portales (LinkedIn, InfoJobs) limitan el acceso automático; el agente usa las APIs de
+  empleo de las empresas y, si no puede leer una oferta, la marca como `no verificada`.
+- Solo recomienda: no se postula ni rellena formularios por ti.
 
-## Next features to implement
+## Licencia
 
-In this order:
-
-1. **Personalized CV:** a “Generar CV” button per vacancy. Generate an adapted PDF solely from confirmed information, without inventing experience, skills, dates or achievements; support review and download.
-2. **He aplicado:** record the vacancy, URL, date and application status after the user applies. Associate the exact CV version sent; when multiple versions exist, the user chooses. Allow an external CV or registration without a CV. **This does not submit applications.**
-3. **Tracker:** view and update statuses, notes and next steps. Preserve the associated historical CV when the profile changes.
-
-## Later stages
-
-- A database and multi-user accounts with appropriate personal-data storage and access.
-- Daily searches for new vacancies.
-- Visual CV templates.
-- Application submission from the app. Every submission, including automated submissions, requires explicit user approval for that application after reviewing the vacancy and outgoing content. The current prototype neither submits applications nor contacts companies.
-
-## Run the local interface
-
-With `requirements.txt` dependencies installed in `.venv`, run from the repository directory:
-
-```bash
-.venv/bin/python -m streamlit run app.py --server.address 127.0.0.1 --browser.gatherUsageStats false
-```
-
-Open the local URL printed by the terminal, usually `http://127.0.0.1:8501`.
-
-Set `OPENAI_API_KEY` and `TAVILY_API_KEY` manually in `.env`. `OPENAI_MODEL` overrides the default `gpt-6-luna`. Searches and skill suggestions use external services; reevaluation uses OpenAI with stored evidence. Base CV generation is local.
-
-Save data before starting an action. Editing and saving do not call external services. Profiles are stored in `user_profile.json`; evaluations, available sources and diagnostics in `.local_data/`, including `.local_data/evaluations.json` and `.local_data/offer_feedback.json`. Previous results do not automatically update after profile changes: reevaluate them or start a new search.
-
-### Naming and saved-data compatibility
-
-Python modules, functions and variables use English names; interface text remains Spanish. Examples include `profiles/user_profile.py`, `profiles/profile_ui.py`, `profiles/career_history.py`, `jobs/agent.py`, `jobs/job_search.py` and `jobs/evaluation.py`.
-
-On loading, legacy `perfil.json` and `.datos/` files are moved to their English paths without rewriting their contents. Existing destination files are never overwritten. Legacy JSON field names remain supported through explicit model aliases and the existing profile migration logic, preserving saved information.
-
-## Privacy and secrets
-
-- Never commit API keys, passwords, tokens or `.env`.
-- Never commit profiles, real search results, personal descriptions/answers, applications, private notes or CVs, including generated PDFs and external documents.
-- Keep `user_profile.json`, `.local_data/`, `.env`, the virtual environment and PDFs excluded through `.gitignore`. Legacy private paths remain excluded too. Review new files before committing them.
-- Use fictional data only in repository examples and tests.
-- Current persistence is local JSON storage, not an account, synchronization or model training. Searches and reevaluation share the information necessary for the action with configured services.
-
-The prototype is intended for personal local use. A database, multi-user access and application submission belong to later stages.
-
-## Private vacancy follow-up topics
-
-Recommendation cards show interest, accredited requirements, partial matches and confirmed gaps. Vacancy questions and unknown-information notices are not shown in cards or replaced with another visible alert. User questions remain exclusively in “Mejorar mi perfil”; vacancy uncertainties never become user profile facts.
-
-Unknown criteria and their evidence remain in the saved evaluation; missing information is neither fulfillment nor a confirmed mismatch. Evaluation saves also rebuild a private `vacancy_follow_up` map by listing URL, containing unknown vacancy criteria and questions for future recruiter conversations. Existing evaluations remain compatible and retain their original unknowns; this extra map is built when evaluations are next saved. New verified evidence can update evaluations through the existing evaluation flow, refreshing these topics without retaining stale unknowns. No automatic monitoring, application records, recruiter messages or tracker flow is implemented by this preparation.
-
-Offline checks verify hidden vacancy questions, preserved unknown assessments and separation from user questions. Live retrieval and the future application/tracker workflow remain unvalidated.
-
-## Conversational preference memory and immediate messages
-
-Native chat submission queues and displays the user message before any model call. The pending turn is consumed once; the input is disabled and “Escribiendo…” appears while processing. Opening, closing and rerendering never resubmit a completed turn.
-
-The model can remember or forget clearly expressed lasting search preferences through validated tools. These notes persist in the private profile's `conversation_preferences` list, feed later search/evaluation contexts and are separate from confirmed professional facts and session conversation history. A temporary request does not become lasting memory; ambiguous intent requires clarification. Notes are preferences, not proof of skills or experience, and do not enter the CV. Manual profile fields take precedence and notes do not automatically become hard filters or alter numerical ranking weights. Users can undo changes in the chat or review and remove notes under search preferences; full-profile editing can add/remove them. This is stored preference memory, not model training.
-
-Offline tests cover message-before-call ordering, exactly-once submission, persisted notes, undo, session reopening and future search context without changes to confirmed career data. Real-model inference of permanence, conflicts and recommendation quality remains pending live validation.
-
-## Saved and discarded offer lists
-
-A “Guardadas y descartadas” tab contains separate “Guardadas” and “Descartadas” lists. Each entry shows only its clickable job title. Clicking opens a native Streamlit dialog with the same recommendation summary, evidence and save/discard controls as the search cards. The dialog has a top-right close cross and opening/closing uses local evaluations without API calls. Saved offers are bookmarks, not submitted applications.
-
-The “Me interesa” action and its list have been removed from the interface. Existing interest flags/history remain in private feedback storage for compatibility; no old data is deleted. Saving, discarding, reasons, undo and adaptive priorities continue to work. No application submission or tracker functionality is added.
-
-## Project structure and file responsibilities
-
-`app.py` remains the Streamlit entry point; `main.py` remains the command-line entry point. `run_tests.py` runs packaged tests with network blocked and diagnostic writes isolated from actual user data. Development conventions and coordination rules are in [AGENTS.md](AGENTS.md), separate from runtime assistant instructions.
-
-| Package | Files and responsibilities |
-| --- | --- |
-| `profiles/` | `user_profile.py`: normalization, migration and model payloads; `profile_ui.py`: summaries and editors; `career_history.py`: career/contact entries; `skill_store.py`: confirmed skill sources and decisions; `skills.py`: explicit proposals and acceptance; `profile_improvement.py`: user questions and confirmed answers. |
-| `jobs/` | `agent.py`: retrieval/evaluation orchestration; `job_search.py`: Tavily tools and limits; `job_listings.py`: CLI listing checks; `evaluation.py`: schemas, evidence validation and ranking; `presentation.py`: explanations and private vacancy topics. |
-| `chat/` | `conversational_agent.py`: conversational model/tool loop; `chat_ui.py`: floating panel, message submission and integration with search/preferences. |
-| `memory/` | `offer_feedback.py`: stored offer actions and adaptive priorities; `feedback_ui.py`: their controls/notices; `directed_chat.py`: company interests and temporary search scope; `conversational_memory.py`: lasting conversational preference notes. |
-| `resumes/` | `cv.py`: confirmed base CV content, in-memory PDF preview/download. |
-| `shared/` | `paths.py`: stable project root; `local_storage.py`: private JSON and legacy migration; `validation.py`: required-data rules; `wire_models.py`: compatible JSON aliases; `diagnostics.py`: sanitized technical records. |
-| `tests/` | Offline profile/career/skills, search/evaluation, conversation, memory/feedback, storage migration and readiness-validation regressions, plus simulated Streamlit fixtures. |
-
-Every own Python module has a responsibility docstring. Package `__init__.py` files identify packages; they perform no initialization of user data or external services. New files belong directly in their feature package; shared helpers belong in `shared/`.
-
-Private files remain at the project root (`user_profile.json`, `.env`, `.local_data/`) and remain ignored by Git. `shared.paths.PROJECT_ROOT` anchors paths regardless of where a feature module lives. No stored JSON format or runtime interface design is changed by this reorganization. `agent_instructions.md` remains at the root and is read into search/evaluation/CLI model instructions; chat and skill prompts retain their separate implemented responsibilities.
-
-Execution commands above remain unchanged. For subsequent development chats, name the feature folder and intended files, ask for reuse of shared modules, and follow `AGENTS.md` coordination rules when another chat is editing this checkout. Base CV work belongs in `resumes/`; offer integration belongs in `jobs/` and entry-point coordination in `app.py`.
+MIT. Ver [LICENSE](LICENSE).

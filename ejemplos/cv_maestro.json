@@ -1,0 +1,16 @@
+{
+ "_nota": "Ejemplo ficticio del formato. /perfil genera el tuyo en cv/cv_maestro.json a partir de tu CV.",
+ "idioma": "en",
+ "nombre": "Alex Example",
+ "contacto": ["Madrid, Spain", "alex@example.com", "linkedin.com/in/alex-example"],
+ "resumen": "Product-minded engineer with three years of client-facing experience...",
+ "experiencia": [
+  {"id": "acme", "empresa": "Acme Corp", "equipo": "Solutions", "cargo": "Solutions Analyst", "fechas": "Jan 2024 – Present",
+   "bullets": [{"id": "b1", "texto": "Designed and delivered ...", "datos_extra": "Cifras confirmadas que se pueden usar"}]}
+ ],
+ "proyectos": [{"id": "p1", "nombre": "Side project", "contexto": "Personal project", "texto": "Built ...", "enlace": ""}],
+ "educacion": [{"centro": "Universidad Ejemplo", "titulo": "BSc Engineering", "fecha": "2023"}],
+ "skills": [{"categoria": "Tools", "items": ["Excel", "SQL (extra)"]}],
+ "certificaciones": [],
+ "idiomas": "Spanish (native) | English (fluent)"
+}

@@ -1,0 +1,20 @@
+{
+  "display_information": {
+    "name": "Job Agent",
+    "description": "Tu asistente personal de búsqueda de empleo",
+    "background_color": "#1f2937"
+  },
+  "features": {
+    "app_home": { "messages_tab_enabled": true, "messages_tab_read_only_enabled": false },
+    "bot_user": { "display_name": "Job Agent", "always_online": false }
+  },
+  "oauth_config": {
+    "scopes": { "bot": ["chat:write", "im:history", "im:read", "im:write", "app_mentions:read"] }
+  },
+  "settings": {
+    "event_subscriptions": { "bot_events": ["message.im", "app_mention"] },
+    "interactivity": { "is_enabled": false },
+    "socket_mode_enabled": true,
+    "token_rotation_enabled": false
+  }
+}
