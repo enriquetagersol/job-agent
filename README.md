@@ -45,7 +45,8 @@ Dos pestañas:
    Slack o al revisar el correo) y que puedes cambiar. Arrastra el asa ⠿ (o usa ↑/↓ sobre ella) para
    ordenarlas por prioridad. Al pulsar una fila se abre su detalle, donde cambias la etapa, apuntas
    novedades con su fecha o creas su CV.
-2. **Ofertas** — aquí están **📄 Mi CV** (sube tu CV en PDF, DOCX o TXT: Claude lo analiza y genera tu
+2. **Ofertas** — aquí están **📄 Mi CV** (sube tu CV, añade cosas a tu CV base y descarga tu **CV general** de una
+   página, no optimizado para ninguna oferta, en inglés o español; Claude analiza el CV que subas y genera tu
    perfil y tu CV maestro; al subir uno nuevo se guarda copia de los anteriores en `perfil/historial/`),
    **🔍 Buscar ofertas** (descarga ofertas de ~145 empresas y Claude
    analiza hasta 25 nuevas; 5-10 min, ≈ 1-2 $) y **⚙︎ Preferencias** (puestos, dónde, salario; y

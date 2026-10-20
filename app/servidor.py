@@ -97,7 +97,8 @@ class Manejador(BaseHTTPRequestHandler):
             ok, motivo = cv_ia.disponibilidad()
             correo = datos._leer(os.path.join(datos.DIR_DATOS, "correo_estado.json"), {})
             return self._json(200, {**datos.estado_completo(), "ia": {"disponible": ok, "motivo": motivo},
-                                    "perfil": perfil_ia.estado(), "aviso_correo": correo.get("ofertas_correo", {})})
+                                    "perfil": perfil_ia.estado(), "aviso_correo": correo.get("ofertas_correo", {}),
+                                    "cv_general": cv_ia.estado_general()})
         if ruta.startswith("/archivo/"):
             destino = os.path.realpath(os.path.join(datos.RAIZ, unquote(ruta[len("/archivo/"):])))
             if not any(destino.startswith(os.path.realpath(p) + os.sep) for p in ARCHIVOS_PERMITIDOS):
@@ -134,6 +135,8 @@ class Manejador(BaseHTTPRequestHandler):
                 datos.ordenar_candidaturas([str(i) for i in ids])
                 return {"ok": True}
             return self._escritura(ordenar)
+        if p == ["api", "cv", "general"]:
+            return self._escritura(lambda: (cv_ia.lanzar_general(self._cuerpo().get("idioma")), {"ok": True})[1])
         if p == ["api", "cv", "proponer"]:
             def proponer():
                 import maestro_ia
@@ -221,6 +224,8 @@ def main():
         if (c.get("cv_trabajo") or {}).get("estado") == "generando":
             datos.actualizar_candidatura(c["id"], tocar_fecha=False, cv_trabajo={
                 "estado": "error", "mensaje": "Se interrumpió al cerrar la app. Vuelve a intentarlo."})
+    if cv_ia.estado_general().get("estado") == "generando":
+        cv_ia._guardar_general(estado="error", mensaje="Se interrumpió al cerrar la app. Vuelve a intentarlo.")
     pe = perfil_ia.estado()
     if pe.get("estado") == "analizando":
         perfil_ia._guardar_estado(estado="error", mensaje="El análisis se interrumpió al cerrar la app. Sube el CV de nuevo.")

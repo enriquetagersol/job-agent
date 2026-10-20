@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import unicodedata
 
 import datos
@@ -161,7 +162,7 @@ def _mensaje_oferta(cand, oferta):
 
 # ---------- llamada a la API ----------
 
-def _llamar(cliente, mensajes):
+def _llamar(cliente, mensajes, sistema=None, web=True):
     """Una vuelta con streaming. Reanuda si el servidor pausa el turno (pause_turn)."""
     import anthropic
     uso = {"in": 0, "out": 0, "cache_w": 0, "cache_r": 0}
@@ -171,9 +172,9 @@ def _llamar(cliente, mensajes):
             max_tokens=32000,
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",  # si el modelo rechaza la petición, la reintenta otro modelo
-            system=_sistema(),
+            system=sistema or _sistema(),
             output_config={"effort": "high", "format": {"type": "json_schema", "schema": _schema()}},
-            tools=[{"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 3}],
+            **({"tools": [{"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 3}]} if web else {}),
             messages=mensajes,
         ) as stream:
             resp = stream.get_final_message()
@@ -291,3 +292,95 @@ def generar(cid):
 def _fallo(cid, inicio, mensaje):
     datos.actualizar_candidatura(cid, cv_trabajo={"estado": "error", "inicio": inicio, "mensaje": mensaje},
                                  tocar_fecha=False)
+
+
+# ---------- CV general (no optimizado para ninguna oferta) ----------
+
+F_GENERAL = os.path.join(datos.DIR_DATOS, "cv_general.json")
+DIR_GENERAL = os.path.join(datos.RAIZ, "cv", "general")
+
+INSTRUCCIONES_GENERAL = """Eres el módulo de CV de Job Agent. Haces su CV GENERAL de una página: no es para una oferta \
+concreta, sino para enviar o enseñar en cualquier sitio, orientado a los puestos que busca (te los paso).
+
+Regla de oro: verdad. Solo puedes seleccionar, reordenar, resumir y reformular contenido del CV MAESTRO y del PERFIL. \
+Nunca inventes experiencia, herramientas, cifras, títulos, fechas ni nivel de una skill. Las marcas "(extra)" son \
+contenido verdadero; quítales la marca. "datos_extra" son datos confirmados que sí puedes usar.
+
+Cómo hacerlo:
+- Idioma: el que te indique el mensaje.
+- Resumen de 3-4 líneas con lo que la hace distinta (perfil técnico + negocio, ownership, lo que construye), \
+pensado para los puestos que busca, sin nombrar ninguna empresa a la que aplique.
+- Experiencia: todos los puestos (sin huecos de cronología), máximo 3 bullets por puesto, los de más impacto y \
+ownership primero. Las prácticas antiguas, en una línea.
+- Proyectos: los 2-3 más fuertes para esos puestos; si hay proyectos personales recientes con IA, suelen ir primero.
+- Skills: agrupadas y ordenadas por relevancia para esos puestos.
+- Debe caber en UNA página A4: resumen ≤ 4 líneas, bullets de ≤ 3 líneas.
+- Aplica la sección "Cómo presentarse" del perfil.
+- notas_md (en español, Markdown) con: "## A qué perfil apunta", "## Qué he puesto delante", \
+"## Qué he dejado fuera (y por qué)" y "## Revisa antes de enviar"."""
+
+
+def estado_general():
+    return datos._leer(F_GENERAL, {"estado": "inactivo"})
+
+
+def _guardar_general(**cambios):
+    e = estado_general()
+    e.update(cambios)
+    with datos._lock:
+        datos._escribir(F_GENERAL, e)
+
+
+def lanzar_general(idioma=None):
+    """Arranca la creación del CV general en segundo plano."""
+    ok, motivo = disponibilidad()
+    if not ok:
+        raise ValueError(motivo)
+    if not os.path.isfile(RUTA_MAESTRO):
+        raise ValueError("Primero sube tu CV en «📄 Mi CV».")
+    if estado_general().get("estado") == "generando":
+        raise ValueError("Ya se está creando tu CV general.")
+    _guardar_general(estado="generando", inicio=_dt.datetime.now().isoformat(timespec="seconds"), mensaje="")
+    threading.Thread(target=_generar_general, args=(idioma,), daemon=True).start()
+
+
+def _generar_general(idioma=None):
+    import anthropic
+    try:
+        maestro = json.load(open(RUTA_MAESTRO, encoding="utf-8"))
+        idioma = idioma or maestro.get("idioma") or "en"
+        puestos = ", ".join(datos.preferencias().get("puestos", [])) or "los de su perfil"
+        sistema = [{"type": "text", "text": INSTRUCCIONES_GENERAL}] + _sistema()[1:]
+        mensajes = [{"role": "user", "content": f"Haz mi CV general en {'inglés' if idioma == 'en' else 'español'} "
+                                                f"(idioma \"{idioma}\"). Puestos que busco: {puestos}."}]
+        cliente = anthropic.Anthropic(api_key=_api_key(), max_retries=3)
+        res, resp, _ = _llamar(cliente, mensajes, sistema=sistema, web=False)
+        carpeta = os.path.join(DIR_GENERAL, f"{_dt.datetime.now():%Y-%m-%d_%H%M}_{idioma}")
+        os.makedirs(carpeta, exist_ok=True)
+        nombre = unicodedata.normalize("NFKD", res["cv"]["nombre"]).encode("ascii", "ignore").decode()
+        nombre = re.sub(r"[^A-Za-z0-9]+", "_", nombre).strip("_")[:30] or "CV"
+        ruta_json, ruta_pdf = os.path.join(carpeta, "cv.json"), os.path.join(carpeta, f"CV_{nombre}.pdf")
+        json.dump(res["cv"], open(ruta_json, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        cabe = _render(ruta_json, ruta_pdf)
+        if not cabe:  # un intento de recorte
+            mensajes += [{"role": "assistant", "content": resp.content},
+                         {"role": "user", "content": "No cabe en una página A4. Recórtalo quitando los bullets y "
+                          "proyectos menos fuertes, sin cambiar nada más. Devuelve el resultado completo."}]
+            res, resp, _ = _llamar(cliente, mensajes, sistema=sistema, web=False)
+            json.dump(res["cv"], open(ruta_json, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+            cabe = _render(ruta_json, ruta_pdf)
+        notas = res["notas_md"]
+        dudosas = _cifras_no_respaldadas(res["cv"])
+        if dudosas:
+            notas += ("\n\n## ⚠️ Cifras a comprobar\nNo aparecen en tu CV maestro ni en tu perfil: " + ", ".join(dudosas))
+        if not cabe:
+            notas += "\n\n## ⚠️ Longitud\nOcupa más de una página. Pide otro o recórtalo a mano."
+        ruta_notas = os.path.join(carpeta, "notas.md")
+        open(ruta_notas, "w", encoding="utf-8").write(f"# CV general ({idioma.upper()})\nGenerado: {datos.hoy()}\n\n" + notas)
+        _guardar_general(estado="listo", idioma=idioma, fin=_dt.datetime.now().isoformat(timespec="seconds"),
+                         pdf=os.path.relpath(ruta_pdf, datos.RAIZ), notas=os.path.relpath(ruta_notas, datos.RAIZ),
+                         mensaje="Revisa las cifras marcadas" if dudosas else "")
+    except anthropic.AuthenticationError:
+        _guardar_general(estado="error", mensaje="La API key no es válida.")
+    except Exception as e:  # noqa: BLE001 - se muestra en la app
+        _guardar_general(estado="error", mensaje=str(e) or e.__class__.__name__)

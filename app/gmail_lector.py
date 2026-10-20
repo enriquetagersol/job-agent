@@ -214,12 +214,12 @@ def historial_actual():
 
 
 def nuevos_desde(history_id):
-    """IDs de mensajes añadidos al buzón desde `history_id` y la marca nueva.
+    """IDs de mensajes nuevos desde `history_id` (llegados, o sacados de la papelera o del spam) y la marca nueva.
     Devuelve (None, marca) si la marca es demasiado antigua (Gmail solo guarda ~1 semana)."""
     ids, pagina, marca = [], None, history_id
     while True:
         try:
-            r = _api("history", startHistoryId=history_id, historyTypes="messageAdded",
+            r = _api("history", startHistoryId=history_id, historyTypes=["messageAdded", "labelRemoved"],
                      **({"pageToken": pagina} if pagina else {}))
         except urllib.error.HTTPError as e:
             if e.code == 404:
@@ -227,6 +227,8 @@ def nuevos_desde(history_id):
             raise
         for h in r.get("history", []):
             ids += [a["message"]["id"] for a in h.get("messagesAdded", [])]
+            ids += [a["message"]["id"] for a in h.get("labelsRemoved", [])  # recuperado de la papelera o del spam
+                    if {"TRASH", "SPAM"} & set(a.get("labelIds", []))]
         marca = r.get("historyId", marca)
         pagina = r.get("nextPageToken")
         if not pagina:

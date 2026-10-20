@@ -8,7 +8,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const md = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 // Markdown sencillo a HTML (títulos, listas, tablas, negrita, cursiva, enlaces) para las notas del CV
-const mdLinea = (t) => md(t).replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, "$1<em>$2</em>")
+const mdLinea = (t) => md(t).replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, "$1<em>$2</em>").replace(/(^|[\s(«])_([^_\s][^_]*?)_(?=$|[\s.,;:)»])/g, "$1<em>$2</em>")
   .replace(/https?:\/\/[^\s<)]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener">${u.length > 48 ? u.slice(0, 45) + "…" : u}</a>`);
 function mdBloque(texto) {
   const out = [], lineas = texto.replace(/\r/g, "").split("\n");
@@ -156,6 +156,7 @@ $("#dlg-buscar").addEventListener("close", async () => {
 function vigilar() {
   clearTimeout(vigilar.t);
   const ocupado = (E.estado.busqueda || {}).estado === "buscando" || (E.estado.perfil || {}).estado === "analizando"
+    || (E.estado.cv_general || {}).estado === "generando"
     || E.estado.candidaturas.some((c) => (c.cv_trabajo || {}).estado === "generando");
   const perfilAntes = (E.estado.perfil || {}).estado;
   if (!ocupado) {  // en reposo, se refresca cada minuto (novedades del correo, ofertas de alertas…)
@@ -180,58 +181,78 @@ function vigilar() {
 // ---------- CV adaptado: crear y vista previa ----------
 // «CV optimizado» abre esta ventana: si ya hay un CV para la oferta lo enseña; si no, lo crea (1-3 min) y lo enseña.
 // Desde la vista previa: descargar o generar otro.
-async function abrirCvPrevia(cid) {
-  const c = cand(cid); if (!c) return;
-  E.cvPrevia = cid;
+// La misma ventana sirve para el CV optimizado de una candidatura y para el CV general («general»)
+function fuenteCv(id) {
+  if (id === "general") {
+    const g = E.estado.cv_general || {};
+    return { titulo: "Tu CV general" + (g.pdf && g.idioma ? ` (${g.idioma.toUpperCase()})` : ""), estado: g.estado, mensaje: g.mensaje,
+             pdf: g.pdf, notas: g.notas, tituloNotas: "📝 Qué he priorizado y qué revisar", idioma: g.idioma || "en",
+             esperando: "Creando tu CV general… tarda 1-2 minutos. Puedes cerrar esta ventana: lo verás al pulsar «CV general».",
+             crear: (idioma) => api("POST", "/api/cv/general", { idioma: idioma || g.idioma }) };
+  }
+  const c = cand(id); if (!c) return null;
+  const tr = c.cv_trabajo || {};
+  // Notas: las del CV actual (si el CV se hizo con Claude Code, están en la misma carpeta que el PDF)
+  const notas = c.cv_adaptado && (tr.notas && c.cv_adaptado.startsWith(tr.notas.replace(/[^/]+$/, "")) ? tr.notas : c.cv_adaptado.replace(/[^/]+$/, "notas.md"));
+  return { titulo: `Tu CV para ${c.puesto} · ${c.empresa}`, estado: tr.estado, mensaje: tr.mensaje, pdf: c.cv_adaptado, notas,
+           tituloNotas: "📝 Qué he cambiado y qué revisar",
+           esperando: "Creando tu CV adaptado a esta oferta… tarda 1-3 minutos. Puedes cerrar esta ventana: te aviso cuando esté y lo verás al pulsar «CV optimizado».",
+           crear: () => api("POST", `/api/candidaturas/${id}/cv`) };
+}
+async function abrirCvPrevia(id) {
+  const f = fuenteCv(id); if (!f) return;
+  E.cvPrevia = id;
   const dlg = $("#dlg-cvprev");
   if (!dlg.open) dlg.showModal();
-  if (!c.cv_adaptado && (c.cv_trabajo || {}).estado !== "generando") await crearCv(cid);
+  if (!f.pdf && f.estado !== "generando") await crearCv(id);
   pintarCvPrevia();
 }
-async function crearCv(cid) {
-  try { await api("POST", `/api/candidaturas/${cid}/cv`); await recargar(); }
+async function crearCv(id, idioma) {
+  try { await fuenteCv(id).crear(idioma); await recargar(); }
   catch (e) { aviso("Error: " + e.message); }
   pintarCvPrevia();
 }
 function pintarCvPrevia() {
-  const dlg = $("#dlg-cvprev"), c = cand(E.cvPrevia);
-  if (!dlg.open || !c) return;
-  const tr = c.cv_trabajo || {}, ia = E.estado.ia || {};
-  $("#cvprev-titulo").textContent = `Tu CV para ${c.puesto} · ${c.empresa}`;
+  const dlg = $("#dlg-cvprev"), f = E.cvPrevia && fuenteCv(E.cvPrevia);
+  if (!dlg.open || !f) return;
+  const ia = E.estado.ia || {}, id = E.cvPrevia;
+  $("#cvprev-titulo").textContent = f.titulo;
   const cuerpo = $("#cvprev-cuerpo"), botones = $("#cvprev-botones");
-  if (tr.estado === "generando") {
-    cuerpo.innerHTML = `<p class="esperando"><span class="girando"></span>Creando tu CV adaptado a esta oferta… tarda 1-3 minutos.
-      Puedes cerrar esta ventana: te aviso cuando esté y lo verás al pulsar «CV optimizado».</p>`;
+  if (f.estado === "generando") {
+    cuerpo.innerHTML = `<p class="esperando"><span class="girando"></span>${esc(f.esperando)}</p>`;
+    delete cuerpo.dataset.pdf;
     botones.innerHTML = `<button data-cerrar>Cerrar</button>`;
-  } else if (c.cv_adaptado) {
-    const url = "/archivo/" + encodeURI(c.cv_adaptado), nombre = c.cv_adaptado.split("/").pop();
-    // Notas: las del CV actual (si el CV se hizo con Claude Code, están en la misma carpeta que el PDF)
-    const notas = tr.notas && c.cv_adaptado.startsWith(tr.notas.replace(/[^/]+$/, "")) ? tr.notas : c.cv_adaptado.replace(/[^/]+$/, "notas.md");
+  } else if (f.pdf) {
+    const url = "/archivo/" + encodeURI(f.pdf), nombre = f.pdf.split("/").pop();
     if (cuerpo.dataset.pdf !== url) {
       cuerpo.dataset.pdf = url;
       cuerpo.innerHTML = `<div class="cv-y-notas"><iframe class="pdf" src="${url}#view=FitH" title="Vista previa del CV"></iframe>
-        <aside class="notas-cv" hidden><h3>📝 Qué he cambiado y qué revisar</h3><div class="md"></div></aside></div>`;
-      fetch("/archivo/" + encodeURI(notas)).then((r) => (r.ok ? r.text() : "")).then((t) => {
+        <aside class="notas-cv" hidden><h3>${esc(f.tituloNotas)}</h3><div class="md"></div></aside></div>`;
+      if (f.notas) fetch("/archivo/" + encodeURI(f.notas)).then((r) => (r.ok ? r.text() : "")).then((t) => {
         if (!t || cuerpo.dataset.pdf !== url) return;
         const panel = $(".notas-cv", cuerpo);
         $(".md", panel).innerHTML = mdBloque(t.replace(/^# .*\n/, ""));  // el título ya está arriba
         panel.hidden = false;
       }).catch(() => {});
     }
-    const aviso_ = tr.estado === "listo" && tr.mensaje ? `<span class="err">⚠️ ${esc(tr.mensaje)}</span>` : "";
+    const aviso_ = f.estado === "listo" && f.mensaje ? `<span class="err">⚠️ ${esc(f.mensaje)}</span>` : "";
+    const otroIdioma = id === "general" ? (f.idioma === "es" ? "en" : "es") : null;
     botones.innerHTML = `${aviso_}
       <span class="hueco"></span><button data-cerrar>Cerrar</button>
+      ${otroIdioma ? `<button data-idioma="${otroIdioma}" ${ia.disponible ? "" : "disabled"}>🌐 ${otroIdioma === "es" ? "En español" : "In English"}</button>` : ""}
       <button data-otro ${ia.disponible ? "" : "disabled"}>🔄 Generar otro</button>
       <a class="boton primario" href="${url}" download="${esc(nombre)}">⬇️ Descargar</a>`;
   } else {
-    cuerpo.innerHTML = tr.estado === "error" ? `<p class="err">No se pudo crear el CV: ${esc(tr.mensaje)}</p>`
+    cuerpo.innerHTML = f.estado === "error" ? `<p class="err">No se pudo crear el CV: ${esc(f.mensaje)}</p>`
       : `<p class="err">${esc(ia.motivo || "No se pudo empezar a crear el CV.")}</p>`;
     delete cuerpo.dataset.pdf;
     botones.innerHTML = `<button data-cerrar>Cerrar</button><button class="primario" data-otro ${ia.disponible ? "" : "disabled"}>Intentar de nuevo</button>`;
   }
   $("[data-cerrar]", botones).addEventListener("click", () => dlg.close());
   const otro = $("[data-otro]", botones);
-  if (otro) otro.addEventListener("click", async () => { otro.disabled = true; delete cuerpo.dataset.pdf; await crearCv(c.id); });
+  if (otro) otro.addEventListener("click", async () => { otro.disabled = true; delete cuerpo.dataset.pdf; await crearCv(id); });
+  const idi = $("[data-idioma]", botones);
+  if (idi) idi.addEventListener("click", async () => { idi.disabled = true; delete cuerpo.dataset.pdf; await crearCv(id, idi.dataset.idioma); });
 }
 $("#dlg-cvprev").addEventListener("close", () => { E.cvPrevia = null; });
 
@@ -253,6 +274,9 @@ function pintarCvInfo() {
   if (!ia.disponible) h += `<p class="err">${esc(ia.motivo)}</p>`;
   $("#cv-info").innerHTML = h;
   $("#cv-anadir").hidden = !p.hay_perfil || !ia.disponible;
+  $("#cv-general-btn").hidden = !p.hay_perfil;
+  $("#cv-general-btn").disabled = !ia.disponible;
+  $("#cv-general-btn").innerHTML = (E.estado.cv_general || {}).estado === "generando" ? '<span class="girando"></span>Creando CV general…' : "📄 CV general";
   $("#cv-subir").disabled = !ia.disponible || p.estado === "analizando";
   $("#cv-subir").textContent = p.hay_perfil ? "Subir nuevo CV" : "Subir mi CV";
 }
@@ -279,6 +303,7 @@ $("#cv-anadir-btn").addEventListener("click", async () => {
   btn.disabled = false;
 });
 $("#btn-cv-perfil").addEventListener("click", abrirCv);
+$("#cv-general-btn").addEventListener("click", () => { $("#dlg-cv").close(); abrirCvPrevia("general"); });
 $("#cv-subir").addEventListener("click", () => $("#cv-archivo").click());
 $("#cv-archivo").addEventListener("change", () => {
   const f = $("#cv-archivo").files[0]; $("#cv-archivo").value = "";
@@ -685,6 +710,12 @@ function pintarBloqueCv(c) {
   let v = "candidaturas"; try { v = localStorage.getItem("ja-vista") || v; } catch (_) {}
   if (!["ofertas", "candidaturas"].includes(v)) v = "candidaturas";
   await recargar(); irA(v);
+  // Enlaces directos: ?vista=ofertas&filtro=guardados · ?candidatura=c001 · ?cv=c010 (vista previa del CV)
+  const q = new URLSearchParams(location.search);
+  if (q.get("vista")) irA(q.get("vista"));
+  if (q.get("filtro")) filtro(q.get("filtro"));
+  if (q.get("candidatura")) abrirCajon(q.get("candidatura"));
+  if (q.get("cv")) abrirCvPrevia(q.get("cv"));
   window.addEventListener("focus", () => { if ($("#cajon").hidden && !$("dialog[open]")) recargar(); });
   setInterval(() => { if ($("#cajon").hidden && !$("dialog[open]") && document.visibilityState === "visible") recargar(); }, 60000);
 })();

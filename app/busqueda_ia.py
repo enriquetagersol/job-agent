@@ -14,6 +14,7 @@ import os
 import re
 import sys
 import threading
+import unicodedata
 
 import datos
 import cv_ia
@@ -26,15 +27,31 @@ HILOS = 4
 _en_marcha = threading.Lock()
 
 # Ubicaciones que la persona escribe -> texto que aparece en las ofertas de los ATS
+# Ubicaciones: se comparan sin tildes y en minúsculas; cada una vale en español y en inglés
+# (las alertas de LinkedIn llegan en español: «Londres y alrededores, Reino Unido»).
 EQUIVALENCIAS = {
-    "remoto desde españa": ["spain", "españa", "espana", "remote", "emea", "europe"],
-    "remoto": ["remote", "emea", "europe"],
-    "londres": ["london", "united kingdom", r"\buk\b"],
-    "dublín": ["dublin", "ireland"], "dublin": ["dublin", "ireland"],
+    "remoto desde espana": ["spain", "espana", "remote", "remoto", "emea", "europe", "europa"],
+    "remoto": ["remote", "remoto", "emea", "europe", "europa"],
+    "londres": ["londres", "london", "reino unido", "united kingdom", r"\buk\b", "inglaterra", "england"],
+    "dublin": ["dublin", "irlanda", "ireland"],
     "madrid": ["madrid", "pozuelo", "alcobendas", "las rozas", "majadahonda", "tres cantos", "boadilla", "getafe",
-               "legan[eé]s", "alcal[aá] de henares", "san sebasti[aá]n de los reyes", "rivas", "torrej[oó]n"],
-    "barcelona": ["barcelona", "sant cugat", "l'hospitalet", "badalona", "cornell[aà]"],
+               "leganes", "alcala de henares", "san sebastian de los reyes", "rivas", "torrejon"],
+    "barcelona": ["barcelona", "sant cugat", "l'hospitalet", "hospitalet", "badalona", "cornella"],
+    "lisboa": ["lisboa", "lisbon", "portugal"], "paris": ["paris", "francia", "france"],
+    "berlin": ["berlin", "alemania", "germany"], "amsterdam": ["amsterdam", "paises bajos", "netherlands"],
+    "munich": ["munich", "munchen", "alemania", "germany"], "zurich": ["zurich", "suiza", "switzerland"],
+    "nueva york": ["nueva york", "new york", r"\bnyc\b"], "estados unidos": ["estados unidos", "united states", r"\busa\b"],
 }
+
+
+def _sin_tildes(t):
+    return unicodedata.normalize("NFKD", (t or "").lower()).encode("ascii", "ignore").decode()
+
+
+def _terminos(u):
+    """Patrones que reconocen una ubicación de sus preferencias (siempre incluye el propio nombre)."""
+    clave = _sin_tildes(u).strip()
+    return list(dict.fromkeys(EQUIVALENCIAS.get(clave, []) + [re.escape(clave)]))
 
 
 def _regex_puestos(puestos):
@@ -50,7 +67,7 @@ def _regex_puestos(puestos):
 def _regex_ubicaciones(pref):
     partes = []
     for u in pref.get("ubicaciones", []) + pref.get("mudarme_a", []):
-        partes += EQUIVALENCIAS.get(u.lower().strip(), [re.escape(u.lower().strip())])
+        partes += _terminos(u)
     return "|".join(dict.fromkeys(partes)) or "$^"
 
 
@@ -67,18 +84,18 @@ FUERA_DE_EUROPA = re.compile(
 MAX_POR_EMPRESA = 3
 
 
-REMOTO = {"remoto", "remoto desde españa"}
+REMOTO = {"remoto", "remoto desde espana"}
 
 
 def _ubicacion_valida(loc, pref):
     """Vale si menciona una de sus ciudades/países, o si es remoto europeo/global sin restricción
     a otro continente."""
-    l = loc.lower()
-    ciudades = [t for u in pref.get("ubicaciones", []) + pref.get("mudarme_a", []) if u.lower() not in REMOTO
-                for t in EQUIVALENCIAS.get(u.lower().strip(), [re.escape(u.lower().strip())])]
-    if re.search(r"spain|españa|espana", l) or (ciudades and re.search("|".join(ciudades), l)):
+    l = _sin_tildes(loc)
+    ciudades = [t for u in pref.get("ubicaciones", []) + pref.get("mudarme_a", []) if _sin_tildes(u) not in REMOTO
+                for t in _terminos(u)]
+    if re.search(r"spain|espana", l) or (ciudades and re.search("|".join(ciudades), l)):
         return True
-    quiere_remoto = any(u.lower() in REMOTO for u in pref.get("ubicaciones", []))
+    quiere_remoto = any(_sin_tildes(u) in REMOTO for u in pref.get("ubicaciones", []))
     return (quiere_remoto and re.search(r"remote|remoto", l) and re.search(r"europe|emea|global|anywhere|worldwide", l)
             and not FUERA_DE_EUROPA.search(l))
 
@@ -132,6 +149,10 @@ Reglas:
 - Filtros duros (si falla uno, estado_analisis = "descartada" con motivo): lo que la persona "descarto" en sus \
 preferencias, ubicación o modalidad incompatibles con sus ubicaciones y "mudarme_a", idioma de trabajo que no sea \
 español o inglés, salario máximo publicado por debajo de su mínimo, prácticas o media jornada.
+- Su salario mínimo está en euros. Si la oferta lo da en otra moneda (GBP, USD, CHF…), conviértelo a euros de forma \
+aproximada ANTES de compararlo; nunca descartes por la moneda. En «datos» pon la cifra original y su equivalente \
+(p. ej. «50.000 GBP/año (~58.000 €)»). Si la ciudad es mucho más cara (Londres, Dublín, Zúrich…), puedes mencionarlo \
+en por_que_no_encaja, pero no es motivo de descarte.
 - Encaje de 0 a 100 con los pesos de sus preferencias detalladas si los define o, si no, requisitos técnicos 30, \
 experiencia 20, funciones 20, preferencias 20 y condiciones 10, aplicando sus "Señales aprendidas" si las hay. Sé estricto con los años exigidos y con programar en producción \
 (si su CV no demuestra experiencia en producción, no la des por buena). Una startup temprana exige menos que un gran laboratorio para el mismo título.

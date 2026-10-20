@@ -6,7 +6,7 @@ completa en <salida>/ofertas/<id>.txt más un índice <salida>/candidatas.json.
 Uso:
   python3 -I herramientas/ats_fetch.py <salida> --titulo "<regex>" --ubicacion "<regex>"
 """
-import argparse, concurrent.futures as cf, datetime, html, json, os, re, urllib.request
+import argparse, concurrent.futures as cf, datetime, html, json, os, re, unicodedata, urllib.request
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 SENIOR = re.compile(r"\b(senior|sr\.?|staff|principal|director|head|lead|vp|chief|manager,|engineering manager"
@@ -169,7 +169,8 @@ def descargar(titulo, ubicacion):
                 todas += r
     vistas, keep = set(), []
     for j in todas:
-        if not (ubic.search(j["location"]) and titulo.search(j["title"])):
+        loc_sin_tildes = unicodedata.normalize("NFKD", j["location"] or "").encode("ascii", "ignore").decode()
+        if not ((ubic.search(j["location"]) or ubic.search(loc_sin_tildes)) and titulo.search(j["title"])):
             continue
         k = (j["company"], j["title"].lower(), j["location"].lower())
         if k in vistas:

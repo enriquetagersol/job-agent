@@ -176,7 +176,9 @@ def t_revisar_correo():
             "etiquetados_en_JOB_SEARCH": inf["etiquetados"], "candidaturas_actualizadas": inf["cambios"],
             "importante": inf["avisos"], "dudas": inf["dudas"],
             "ofertas_nuevas_que_encajan": [{k: o[k] for k in ("empresa", "puesto", "encaje", "url")} for o in inf["ofertas"]],
-            "puestos_de_alertas_esperando": (inf.get("alertas") or {}).get("en_cola", 0)}
+            "alertas_de_empleo": inf.get("alertas") or {},
+            "nota": "En alertas_de_empleo: puestos_en_alertas = cuántos traían; descartados_* = cuáles y por qué; "
+                    "nuevos_en_cola = esperan a juntar 10 para investigarse; en_cola = total esperando. Cuéntaselo."}
 
 
 def t_investigar_oferta(url="", empresa="", puesto="", texto="", ubicacion=""):
