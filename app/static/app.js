@@ -252,10 +252,32 @@ function pintarCvInfo() {
   }
   if (!ia.disponible) h += `<p class="err">${esc(ia.motivo)}</p>`;
   $("#cv-info").innerHTML = h;
+  $("#cv-anadir").hidden = !p.hay_perfil || !ia.disponible;
   $("#cv-subir").disabled = !ia.disponible || p.estado === "analizando";
   $("#cv-subir").textContent = p.hay_perfil ? "Subir nuevo CV" : "Subir mi CV";
 }
-function abrirCv() { pintarCvInfo(); $("#dlg-cv").returnValue = ""; $("#dlg-cv").showModal(); }
+function abrirCv() { pintarCvInfo(); $("#cv-propuesta").innerHTML = ""; $("#dlg-cv").returnValue = ""; $("#dlg-cv").showModal(); }
+// Añadir algo al CV maestro: Claude prepara los cambios, ella los ve y decide si se guardan
+$("#cv-anadir-btn").addEventListener("click", async () => {
+  const texto = $("#cv-anadir-texto").value.trim(), btn = $("#cv-anadir-btn"), caja = $("#cv-propuesta");
+  if (texto.length < 10) { aviso("Cuéntame un poco más qué quieres añadir"); return; }
+  btn.disabled = true; caja.innerHTML = `<p class="sub"><span class="girando"></span>Preparando los cambios…</p>`;
+  try {
+    const p = await api("POST", "/api/cv/proponer", { texto });
+    caja.innerHTML = `<div class="propuesta">
+      <p>${md(p.resumen_es)}</p>
+      <ul>${p.lineas.map((l) => `<li>${mdLinea(l.replace(/\*(.+?)\*/g, "**$1**"))}</li>`).join("")}</ul>
+      ${p.preguntas.length ? `<p class="sub">Para que quede más fuerte, podrías añadir:</p><ul class="preguntas">${p.preguntas.map((q) => `<li>${esc(q)}</li>`).join("")}</ul><p class="sub">Si quieres incluirlo, escríbelo arriba y vuelve a pulsar «Preparar cambios».</p>` : ""}
+      <div class="fila-botones"><button type="button" class="primario" id="cv-aplicar">✅ Añadir a mi CV</button><button type="button" id="cv-descartar">Descartar</button></div></div>`;
+    $("#cv-aplicar").addEventListener("click", async () => {
+      $("#cv-aplicar").disabled = true;
+      try { await api("POST", "/api/cv/aplicar", { id: p.id }); caja.innerHTML = `<p class="ok-txt">✓ Añadido a tu CV. Los próximos CV optimizados ya lo tendrán en cuenta.</p>`; $("#cv-anadir-texto").value = ""; }
+      catch (e) { aviso("Error: " + e.message); $("#cv-aplicar").disabled = false; }
+    });
+    $("#cv-descartar").addEventListener("click", () => { caja.innerHTML = ""; });
+  } catch (e) { caja.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  btn.disabled = false;
+});
 $("#btn-cv-perfil").addEventListener("click", abrirCv);
 $("#cv-subir").addEventListener("click", () => $("#cv-archivo").click());
 $("#cv-archivo").addEventListener("change", () => {

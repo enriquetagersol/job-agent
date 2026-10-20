@@ -16,6 +16,7 @@ import gmail_lector  # noqa: E402
 import sugerencias_ia  # noqa: E402
 
 F_CHAT = os.path.join(datos.DIR_DATOS, "chat.json")
+F_FOTOS = os.path.join(datos.DIR_DATOS, "chat_fotos.json")  # cómo estaban sus datos al acabar cada conversación
 MAX_TURNOS = 20          # mensajes de texto que se recuerdan por conversación
 MAX_PASOS = 12           # rondas de herramientas por respuesta
 _lock_chat = threading.Lock()
@@ -29,7 +30,9 @@ Nada de tablas ni de títulos con #.
 Qué puedes hacer con tus herramientas: contar cómo van sus candidaturas, apuntar novedades (aplicaciones, \
 entrevistas, rechazos, ofertas, feedback, próximos pasos), enseñar ofertas recomendadas y registrar si le \
 interesan o no, revisar y cambiar sus preferencias, lanzar una búsqueda de ofertas, generar un CV adaptado, \
-revisar su correo de Gmail e investigar ofertas que ella haya visto por su cuenta (enlace, empresa y puesto, o texto).
+revisar su correo de Gmail, investigar ofertas que ella haya visto por su cuenta (enlace, empresa y puesto, o texto) y \
+añadir cosas a su CV base (proyectos, logros, herramientas…): primero le enseñas los cambios propuestos y, si hay \
+preguntas (p. ej. una cifra que haría el CV más fuerte), se las haces; solo guardas cuando te dice que sí.
 
 Cuando revises el correo, la herramienta ya lo hace todo: cuéntale lo importante primero (entrevistas, rechazos, \
 ofertas, peticiones con plazo), las ofertas nuevas que encajan con su enlace y las dudas. Sé breve.
@@ -39,6 +42,9 @@ Reglas:
 - No inventes nada: ni fechas, ni cifras, ni datos de ofertas. Si no está en los datos, dilo. Usa una \
 fecha solo si la persona la da (hoy es <hoy>; puedes convertir «el jueves» o «mañana» a fecha).
 - Si una novedad puede corresponder a más de una candidatura, pregunta cuál antes de cambiar nada.
+- Cambia SOLO lo que te pide en su último mensaje. Lo que hay en sus datos manda sobre lo que recuerdes de la \
+conversación: si algo que hablasteis no está o es distinto, es que ella lo ha cambiado (en la app o con otra persona \
+de por medio). No lo «corrijas» ni lo vuelvas a aplicar por tu cuenta; si crees que puede ser un error, pregúntale.
 - Tras cambiar algo, confirma en una línea qué has cambiado.
 - Genera un CV adaptado solo si te lo pide expresamente. Lanza una búsqueda solo si te lo pide.
 - Nunca te postulas a ofertas ni rellenas formularios: solo recomiendas y apuntas.
@@ -192,6 +198,20 @@ def t_analizar_ofertas_pendientes():
             "que_encajan": [{k: o[k] for k in ("empresa", "puesto", "encaje", "url")} for o in recomendadas]}
 
 
+def t_proponer_cambio_cv(texto):
+    import maestro_ia
+    p = maestro_ia.proponer(texto)
+    return {"id": p["id"], "resumen": p["resumen_es"], "cambios": maestro_ia.describir(p), "preguntas": p["preguntas"],
+            "nota": "NO está guardado. Enséñale exactamente estos cambios; si dice que sí, guárdalos con aplicar_cambio_cv."}
+
+
+def t_aplicar_cambio_cv():
+    import maestro_ia
+    p = maestro_ia.aplicar()
+    return {"ok": True, "guardado": maestro_ia.describir(p),
+            "nota": "Guardado en su CV maestro: los próximos CV optimizados ya lo tendrán en cuenta."}
+
+
 _TXT = {"type": "string"}
 _ESTADO = {"type": "string", "enum": datos.ESTADOS,
            "description": "por_aplicar, enviada (aplicada), en_proceso (entrevistas), oferta, rechazada, retirada (la deja la persona)"}
@@ -247,6 +267,14 @@ HERRAMIENTAS = [
     ("analizar_ofertas_pendientes", t_analizar_ofertas_pendientes,
      "Investiga ya los puestos acumulados de sus alertas de empleo (normalmente se esperan a juntar 10 para gastar "
      "menos). Solo si ella lo pide.", _obj({})),
+    ("proponer_cambio_cv", t_proponer_cambio_cv,
+     "Cuando quiera añadir algo a su CV base (un proyecto, un logro, una herramienta, una certificación…): prepara los "
+     "cambios del CV maestro a partir de lo que cuenta. No guarda nada. Pásale todo lo que te haya contado.",
+     _obj({"texto": _TXT}, ["texto"])),
+    ("aplicar_cambio_cv", t_aplicar_cambio_cv,
+     "Guarda en su CV maestro, tal cual, la última propuesta que le enseñaste con proponer_cambio_cv. Úsalo cuando diga "
+     "que sí; NO vuelvas a llamar a proponer_cambio_cv para eso. Si quiere cambios, llama a proponer_cambio_cv con "
+     "todo lo que ha contado más lo nuevo.", _obj({})),
     ("revisar_correo", t_revisar_correo,
      "Revisa su correo nuevo (todo el buzón): etiqueta en JOB SEARCH lo de empleo, actualiza sus candidaturas y "
      "analiza los puestos de las alertas de LinkedIn (los que encajan quedan en Ofertas). Devuelve lo que ha hecho.",
@@ -280,6 +308,61 @@ def _guardar_historial(conv, mensajes):
             datos._escribir(F_CHAT, todo)
 
 
+# ---------- cambios hechos fuera del chat ----------
+
+def _foto():
+    p = datos.preferencias()
+    return {"pref": {k: v for k, v in p.items() if k not in ("actualizado", "frases")},
+            "cand": {c["id"]: [c["empresa"], c["puesto"], c["estado"], (c.get("proximo_paso") or {}).get("texto", ""),
+                               len(c.get("eventos", []))] for c in datos.candidaturas()},
+            "dec": {o["id"]: [o["empresa"], o["puesto"], (o.get("decision") or {}).get("valor")] for o in datos.ofertas()}}
+
+
+def _cambios_fuera(conv):
+    """Lo que ha cambiado en sus datos desde que acabó la última conversación (lo hizo ella en la app o llegó por correo)."""
+    antes = datos._leer(F_FOTOS, {}).get(conv)
+    if not antes:
+        return []
+    ahora, out = _foto(), []
+    for k, v in ahora["pref"].items():
+        a = antes["pref"].get(k)
+        if a == v:
+            continue
+        if isinstance(v, list) and isinstance(a, list):
+            mas, menos = [x for x in v if x not in a], [x for x in a if x not in v]
+            out.append(f"Preferencias · {k}: " + ", ".join(([f"añadido {', '.join(mas)}"] if mas else []) +
+                                                         ([f"quitado {', '.join(menos)}"] if menos else [])))
+        else:
+            out.append(f"Preferencias · {k}: {a} → {v}")
+    for cid, (emp, puesto, estado, paso, n) in ahora["cand"].items():
+        a = antes["cand"].get(cid)
+        if a is None:
+            out.append(f"Candidatura nueva: {emp} · {puesto} ({datos.ETIQUETAS_ESTADO[estado]})")
+            continue
+        if a[2] != estado:
+            out.append(f"{emp} · {puesto}: etapa {datos.ETIQUETAS_ESTADO.get(a[2], a[2])} → {datos.ETIQUETAS_ESTADO[estado]}")
+        if a[3] != paso:
+            out.append(f"{emp} · {puesto}: próximo paso «{paso or '—'}»")
+        if a[4] != n and a[2] == estado:
+            out.append(f"{emp} · {puesto}: novedad apuntada")
+    for cid, a in antes["cand"].items():
+        if cid not in ahora["cand"]:
+            out.append(f"Candidatura borrada: {a[0]} · {a[1]}")
+    for oid, (emp, puesto, dec) in ahora["dec"].items():
+        a = antes["dec"].get(oid)
+        if a and a[2] != dec:
+            out.append(f"Oferta {emp} · {puesto}: decisión {a[2] or 'ninguna'} → {dec or 'ninguna'}")
+    return out[:25]
+
+
+def _guardar_foto(conv):
+    with _lock_chat:
+        todo = datos._leer(F_FOTOS, {})
+        todo[conv] = _foto()
+        with datos._lock:
+            datos._escribir(F_FOTOS, todo)
+
+
 def olvidar(conv):
     _guardar_historial(conv, [])
 
@@ -301,6 +384,12 @@ def responder(conv, texto):
     mensajes = previo + [{"role": "user", "content": texto}]
     sistema = [{"type": "text", "text": SISTEMA.replace("<hoy>", datos.hoy())},
                {"type": "text", "text": f"<perfil>\n{_perfil()}\n</perfil>", "cache_control": {"type": "ephemeral"}}]
+    fuera = _cambios_fuera(conv)
+    if fuera:
+        sistema.append({"type": "text", "text": "<cambios_fuera_del_chat>\nDesde vuestra última conversación ha cambiado "
+                        "esto en sus datos (lo ha hecho ella en la app o ha llegado por su correo). Manda sobre lo "
+                        "que hablasteis antes: no lo deshagas ni vuelvas a aplicar lo anterior; tenlo en cuenta y, si "
+                        "algo te parece un error, pregúntale.\n- " + "\n- ".join(fuera) + "\n</cambios_fuera_del_chat>"})
     cliente = anthropic.Anthropic(api_key=cv_ia._api_key(), max_retries=3)
     trabajo = list(mensajes)
     respuesta = ""
@@ -326,6 +415,7 @@ def responder(conv, texto):
         respuesta = "No puedo ayudarte con eso."
     respuesta = respuesta or "Hecho."
     _guardar_historial(conv, mensajes + [{"role": "assistant", "content": respuesta}])
+    _guardar_foto(conv)  # lo que cambie a partir de ahora fuera del chat se le contará en el siguiente mensaje
     return respuesta
 
 

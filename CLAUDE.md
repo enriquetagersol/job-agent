@@ -68,7 +68,8 @@ JOB SEARCH desde `datos/correo_estado.json` → `ultima_revision`, actualiza las
 rechazos y peticiones con plazo.
 
 `cv/cv_maestro.json` es la fuente de verdad de todo lo que puede aparecer en un CV. Si la persona
-cuenta un logro, una cifra o una herramienta nueva, propón añadirlo ahí. Nunca adaptes el CV
+cuenta un logro, una cifra o una herramienta nueva, propón añadirlo ahí (la app y Slack lo hacen con
+`app/maestro_ia.py`: propuesta primero, se guarda solo con su sí). Nunca adaptes el CV
 por iniciativa propia: solo cuando lo pida.
 
 Si la persona pide algo de un paso cuyo requisito previo no existe (p. ej. `/buscar` sin

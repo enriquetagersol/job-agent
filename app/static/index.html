@@ -115,6 +115,13 @@
   <form method="dialog" class="form">
     <h2>Tu CV</h2>
     <div id="cv-info"></div>
+    <div class="anadir-cv" id="cv-anadir" hidden>
+      <h3>Añadir algo a tu CV</h3>
+      <p class="sub">Un proyecto, un logro, una herramienta, una certificación… Cuéntamelo con tus palabras: te enseño cómo quedaría antes de guardarlo, y los próximos CV optimizados ya lo tendrán en cuenta.</p>
+      <textarea id="cv-anadir-texto" rows="3" placeholder="p. ej. Añade mi proyecto Job Agent: una app que…"></textarea>
+      <div class="fila-botones"><button type="button" id="cv-anadir-btn">Preparar cambios</button></div>
+      <div id="cv-propuesta"></div>
+    </div>
     <input type="file" id="cv-archivo" accept=".pdf,.docx,.txt,.md,application/pdf" hidden>
     <div class="botones">
       <button value="cerrar">Cerrar</button>

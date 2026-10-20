@@ -118,8 +118,9 @@ app se pone al día con lo que llegó mientras estaba cerrada. También puedes p
   oportunidad de un recruiter, alerta de empleo u otra cosa.
 - Pone la etiqueta **JOB SEARCH** a los correos de empleo y actualiza o crea tus candidaturas con la
   fecha del correo (también los que envías tú, como un CV a alguien de la empresa).
-- De las **alertas de empleo** (LinkedIn, Indeed…) saca cada puesto y, para no gastar de más, los **acumula y los
-  investiga de 10 en 10** (o antes si alguno lleva 3 días esperando; cada uno cuesta unos 0,10-0,25 $). Cada puesto
+- De las **alertas de empleo** (LinkedIn, Indeed…) saca cada puesto, descarta gratis lo senior, de otras zonas o ya
+  visto, y hace una **criba barata por título** con un modelo pequeño (≈0,0005 $ por puesto) para quedarse solo con los
+  que probablemente te encajan. Para no gastar de más, los **acumula y los investiga de 10 en 10** (o antes si alguno lleva 3 días esperando; cada uno cuesta unos 0,10-0,25 $). Cada puesto
   lo **investiga con búsquedas web**
   (la web de empleo de la empresa o su ATS; LinkedIn queda bloqueado), lo analiza como una búsqueda y añade
   a *Ofertas* (marcados como «Nueva») los que encajan.
@@ -172,6 +173,7 @@ app/perfil_ia.py        análisis del CV subido con la API de Claude (botón Mi 
 app/empresas_ia.py      descripción de la empresa de cada oferta («La empresa»), con búsqueda web
 app/agente_chat.py      agente conversacional con herramientas sobre los datos (lo usa Slack)
 app/gmail_lector.py     acceso a Gmail (leer y poner la etiqueta JOB SEARCH; nada más)
+app/maestro_ia.py       añadir cosas al CV maestro cuando lo pides (proyectos, logros, skills), con propuesta antes de guardar
 app/correo_ia.py        trigger de correo nuevo: clasifica, etiqueta, actualiza candidaturas, analiza alertas y avisa
 app/slack_bot.py        bot de Slack (Socket Mode); slack/manifest.json para crear la app
 perfil/preferencias.json  preferencias editables desde la app (mandan sobre preferencias.md)

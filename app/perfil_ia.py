@@ -104,7 +104,7 @@ Reglas:
 justificación; skills con años y evidencia, marcando «declarada» la que solo aparece en una lista.
 - Si te paso un PERFIL ANTERIOR o un CV MAESTRO ANTERIOR, son de la misma persona: conserva lo que la persona confirmó \
 y no esté en el CV nuevo (datos extra, certificaciones o herramientas marcadas «(extra)», «datos_extra», la \
-sección «Cómo presentarse» y cualquier nota de lo aprendido), salvo que el CV nuevo lo contradiga. Si no hay \
+sección «Cómo presentarse», la sección «Añadido por ti» y los proyectos o logros que añadió ella, y cualquier nota de lo aprendido), salvo que el CV nuevo lo contradiga. Si no hay \
 perfil anterior, en «Cómo presentarse» propón 2-3 historias del CV que mejor demuestran ownership e iniciativa, \
 sin exagerar.
 - Escribe nombres de personas y empresas con su capitalización normal (p. ej. «Alex Example», «Acme Corp»), aunque el

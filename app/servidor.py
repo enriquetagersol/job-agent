@@ -134,6 +134,18 @@ class Manejador(BaseHTTPRequestHandler):
                 datos.ordenar_candidaturas([str(i) for i in ids])
                 return {"ok": True}
             return self._escritura(ordenar)
+        if p == ["api", "cv", "proponer"]:
+            def proponer():
+                import maestro_ia
+                pr = maestro_ia.proponer(self._cuerpo().get("texto", ""))
+                return {**pr, "lineas": maestro_ia.describir(pr)}
+            return self._escritura(proponer)
+        if p == ["api", "cv", "aplicar"]:
+            def aplicar():
+                import maestro_ia
+                maestro_ia.aplicar(self._cuerpo().get("id", ""))
+                return {"ok": True}
+            return self._escritura(aplicar)
         if p == ["api", "preferencias", "interpretar"]:
             def interpretar():
                 b = self._cuerpo()
