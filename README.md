@@ -1,5 +1,42 @@
 # Job Agent
 
+**A personal AI job-search assistant.** It finds openings that match my experience (from my CV) and my
+preferences by reading every posting in full, writes a tailored one-page CV for each one, tracks my
+applications, picks up updates from my Gmail and lets me talk to it on Slack from my phone. The more I use
+it, the better it gets: it learns from the openings I like, the ones I reject and the applications where
+I've been turned down.
+
+![Job Agent dashboard (fictitious demo data)](docs/ja-dashboard.jpg)
+
+| Recommended openings | Tailored CV with notes |
+|---|---|
+| ![Openings with fit score and analysis](docs/ja-ofertas.jpg) | ![Tailored CV preview with notes](docs/ja-cv.jpg) |
+
+<sub>Screenshots use fictitious demo data: made-up person, companies and openings.</sub>
+
+**What it does**
+- **Search:** careers pages of 145 companies across 7 recruiting platforms (Ashby, Greenhouse, Lever…).
+  Each posting gets a 0–100 fit score, what I'd do, why it fits and why not.
+- **Learns:** every 👍/👎 and its reason updates my "learned signals" for the next searches.
+- **Tailored CV:** one page per opening, never inventing anything, with notes on what they value, what
+  changed and which gaps to prepare. It flags any figure that isn't in my CV.
+- **Tracking:** a dashboard with today's to-dos, applications by stage and an AI-suggested next step.
+- **Gmail:** checks the inbox every 2 minutes, detects interviews, rejections, offers and deadlines, and
+  updates the application. Read and label only.
+- **Slack:** 17 actions on my data from my phone ("I got rejected at X", "research this opening"…).
+
+**Product decisions:** the person decides (nothing important is saved without a yes) · no making things
+up · cost under control (free filters, then a ~$0.0005 title screening, then in-depth research in
+batches of 10) · privacy (runs locally; keys never leave the machine).
+
+**Built with:** Python, HTML/CSS/JS, Claude API and Claude Code, Gmail API (OAuth), Slack API (Socket
+Mode). ~5,100 lines in 15 modules. I designed the product, flows, rules and limits, built it with Claude
+Code as a copilot and validated it in my own job search.
+
+---
+
+*Documentación de uso (en español).*
+
 Agente de búsqueda de empleo que funciona dentro de Claude Code, con una **app local** para ver y
 gestionar tus candidaturas. El agente lee tu CV, aprende qué buscas, busca ofertas, lee cada
 descripción completa y te recomienda las de mayor encaje. La app te deja seguir el progreso de
@@ -29,7 +66,7 @@ Requisitos: Python 3.9+ y Google Chrome (para generar los CVs en PDF). Para el a
 - Nunca pongas la clave en el código ni en ningún archivo que no sea `.env`.
 - Si la carpeta del proyecto se sincroniza con iCloud o Dropbox, un `.env` se sincroniza en texto
   plano: en Mac usa el Llavero.
-- Recomendado: repositorio **privado**.
+- Si lo usas con tus propios datos en tu copia, mejor en un repositorio **privado**.
 
 ## La app
 
@@ -145,16 +182,6 @@ Conexión (una vez):
    El cliente y el token quedan en el Llavero; puedes borrar el JSON de Descargas.
 
 El historial de las conversaciones se guarda en `datos/chat.json` (últimos mensajes; no se sube a GitHub).
-
-## Correo (Gmail) y avisos
-
-Con el conector de Gmail activo, el agente lee **solo** la etiqueta «JOB SEARCH» (y solo para leer:
-nunca envía ni borra nada) para completar tus candidaturas: fechas reales, contactos, fases y
-feedback. Una tarea programada, **«job-agent-avisos-correo», todos los días a las 9:00**, revisa
-los correos nuevos de esa etiqueta, actualiza el tracker y te envía una notificación solo si hay
-entrevista, oferta, rechazo o una petición con plazo. Funciona mientras la app de Claude esté
-abierta (si estaba cerrada, se ejecuta al abrirla). Puedes cambiarla o pausarla en la sección
-*Scheduled* de la barra lateral.
 
 ## Cómo puntúa
 
