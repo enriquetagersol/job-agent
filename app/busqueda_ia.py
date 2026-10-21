@@ -18,11 +18,13 @@ import unicodedata
 
 import datos
 import cv_ia
+import modelos
 
 sys.path.insert(0, os.path.join(datos.RAIZ, "herramientas"))
 import ats_fetch  # noqa: E402
 
-MAX_ANALIZAR = 25          # tope de ofertas nuevas que se analizan por búsqueda (controla el coste)
+MAX_ANALIZAR = 15          # tope de ofertas nuevas que se analizan a fondo por búsqueda (controla el coste)
+MAX_CRIBA = 45             # candidatas que pasan antes por la criba barata por título
 HILOS = 4
 _en_marcha = threading.Lock()
 
@@ -212,7 +214,7 @@ def _analizar(cliente, sistema, j):
              f"Salario: {j['salary'] or 'no publicado'}\nContrato: {j['emp'] or 'desconocido'}\n"
              f"Fecha: {j['date'] or 'desconocida'}\nURL: {j['url']}\n\n{j['text'][:30000]}")
     r = cliente.beta.messages.create(
-        model=cv_ia.MODELO, max_tokens=16000,
+        model=modelos.para("analizar_oferta"), max_tokens=16000,
         betas=["server-side-fallback-2026-07-01"], fallbacks="default",
         system=sistema,
         output_config={"effort": "medium", "format": {"type": "json_schema", "schema": _schema()}},
@@ -273,6 +275,16 @@ def _ejecutar():
             if por_empresa.get(j["company"], 0) < MAX_POR_EMPRESA:
                 por_empresa[j["company"]] = por_empresa.get(j["company"], 0) + 1
                 elegidas.append(j)
+        cliente = anthropic.Anthropic(api_key=cv_ia._api_key(), max_retries=3)
+        # Criba barata por título (Haiku, céntimos) antes del análisis a fondo: no gastar en lo que no encaja
+        elegidas = elegidas[:MAX_CRIBA]
+        if elegidas:
+            import correo_ia
+            _estado(fase=f"Filtrando {len(elegidas)} ofertas por el título…")
+            puestos = [{"titulo": j["title"], "empresa": j["company"].title(), "ubicacion": j.get("location") or ""} for j in elegidas]
+            pasan, _ = correo_ia._criba(cliente, puestos)
+            ok = {(p["titulo"], p["empresa"]) for p in pasan}
+            elegidas = [j for j, p in zip(elegidas, puestos) if (p["titulo"], p["empresa"]) in ok]
         nuevas = elegidas[:MAX_ANALIZAR]
         if not nuevas:
             _estado(estado="listo", fase="No hay ofertas nuevas que encajen con tus preferencias.", total=0,
@@ -280,7 +292,6 @@ def _ejecutar():
             return
 
         _estado(fase=f"Analizando {len(nuevas)} ofertas nuevas…", total=len(nuevas))
-        cliente = anthropic.Anthropic(api_key=cv_ia._api_key(), max_retries=3)
         sistema = _sistema()
         uso_total = {"in": 0, "out": 0, "cache_w": 0, "cache_r": 0}
         resultados, hechas = [], 0
@@ -308,7 +319,7 @@ def _ejecutar():
                             "sencillo": {"que_harias": res["que_harias"], "por_que_encaja": res["por_que_encaja"],
                                          "por_que_no_encaja": res["por_que_no_encaja"]},
                             "rasgos": res["rasgos"], "informe": "busqueda-app"})
-                    _estado(hechas=hechas, coste=cv_ia._coste(uso_total),
+                    _estado(hechas=hechas, coste=modelos.coste(modelos.para("analizar_oferta"), uso_total),
                             fase=f"Analizando ofertas: {hechas} de {len(nuevas)}")
 
         datos.importar_ofertas(resultados, informe=f"busqueda-app {datos.hoy()}")
@@ -320,7 +331,7 @@ def _ejecutar():
             pass
         recomendadas = sum(1 for r in resultados if r["estado_analisis"] == "recomendada")
         fallidas = len(nuevas) - len(resultados)
-        _estado(estado="listo", nuevas=recomendadas, coste=cv_ia._coste(uso_total),
+        _estado(estado="listo", nuevas=recomendadas, coste=modelos.coste(modelos.para("analizar_oferta"), uso_total),
                 fin=_dt.datetime.now().isoformat(timespec="seconds"),
                 fase=((f"{recomendadas} oferta nueva" if recomendadas == 1 else f"{recomendadas} ofertas nuevas")
                       + f" para ti de {len(nuevas)} analizadas"

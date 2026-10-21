@@ -16,6 +16,7 @@ import threading
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import datos  # noqa: E402
 import cv_ia  # noqa: E402
+import modelos  # noqa: E402
 import busqueda_ia  # noqa: E402
 
 RUTA = os.path.join(datos.RAIZ, "perfil", "preferencias.md")
@@ -80,7 +81,7 @@ def aprender():
         import anthropic
         cliente = anthropic.Anthropic(api_key=cv_ia._api_key(), max_retries=2)
         r = cliente.beta.messages.create(
-            model=cv_ia.MODELO, max_tokens=6000, system=SISTEMA,
+            model=modelos.para("aprendizaje"), max_tokens=6000, system=SISTEMA,
             betas=["server-side-fallback-2026-07-01"], fallbacks="default",
             output_config={"effort": "medium", "format": {"type": "json_schema", "schema": ESQUEMA}},
             messages=[{"role": "user", "content":

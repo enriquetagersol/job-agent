@@ -191,6 +191,14 @@ Conexión (una vez):
 
 El historial de las conversaciones se guarda en `datos/chat.json` (últimos mensajes; no se sube a GitHub).
 
+## Coste
+
+Solo cuesta la API de Claude, y cada tarea usa el modelo justo (`app/modelos.py`): **Haiku** (muy barato) para
+clasificar correos, criba por título, próximos pasos, preferencias, aprendizaje, fichas de empresa y el chat de Slack;
+**Sonnet** para analizar ofertas, CVs y tu perfil. Las búsquedas filtran por título antes de analizar a fondo (máx. 15
+ofertas). Orientativo: un correo ≈ 0,0005 $, un mensaje de Slack ≈ 0,002 $, una oferta analizada ≈ 0,03-0,05 $, un CV
+optimizado ≈ 0,10-0,15 $. Pon un límite mensual en platform.claude.com → Limits.
+
 ## Cómo puntúa
 
 Primero aplica tus *dealbreakers*. Después puntúa de 0 a 100 con los pesos de

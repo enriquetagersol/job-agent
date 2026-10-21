@@ -8,6 +8,7 @@ import unicodedata
 
 import datos
 import cv_ia
+import modelos
 
 DESCRIPCION = {
     "sectores": "sectores, tipos de empresa o productos que le atraen",
@@ -92,7 +93,7 @@ def _claude(campo, texto):
     cliente = anthropic.Anthropic(api_key=cv_ia._api_key(), max_retries=2)
     opciones = datos.CATALOGOS[campo]
     r = cliente.beta.messages.create(
-        model=cv_ia.MODELO, max_tokens=2000,
+        model=modelos.para("preferencias"), max_tokens=2000,
         betas=["server-side-fallback-2026-07-01"], fallbacks="default",
         output_config={"effort": "low", "format": {"type": "json_schema", "schema": {
             "type": "object", "additionalProperties": False, "required": ["categorias"],

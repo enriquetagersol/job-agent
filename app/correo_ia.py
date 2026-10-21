@@ -23,6 +23,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import datos  # noqa: E402
 import cv_ia  # noqa: E402
+import modelos  # noqa: E402
 import gmail_lector  # noqa: E402
 import busqueda_ia  # noqa: E402
 
@@ -109,7 +110,7 @@ def _clasificar(cliente, m, cands):
              f"De: {m['de']}\nPara: {m['para']}\nLo envió ella: {'sí' if m['enviado'] else 'no'}\n"
              f"Asunto: {m['asunto']}\n\n{m['texto'][:6000]}\n</correo>")
     r = cliente.beta.messages.create(
-        model=cv_ia.MODELO, max_tokens=3000, system=SISTEMA,
+        model=modelos.para("clasificar_correo"), max_tokens=3000, system=SISTEMA,
         betas=["server-side-fallback-2026-07-01"], fallbacks="default",
         output_config={"effort": "low", "format": {"type": "json_schema", "schema": _esquema()}},
         messages=[{"role": "user", "content": texto}])
@@ -186,10 +187,10 @@ def _investigar(cliente, sistema, p, url=""):
     mensajes = [{"role": "user", "content": texto}]
     for _ in range(5):  # la búsqueda web puede pausar el turno; se continúa
         r = cliente.beta.messages.create(
-            model=cv_ia.MODELO, max_tokens=16000, system=sistema,
+            model=modelos.para("investigar_oferta"), max_tokens=16000, system=sistema,
             betas=["server-side-fallback-2026-07-01"], fallbacks="default",
-            tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 4, "blocked_domains": BLOQUEADOS},
-                   {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 3, "blocked_domains": BLOQUEADOS}],
+            tools=[modelos.busqueda_web(modelos.para("investigar_oferta"), 4, blocked_domains=BLOQUEADOS),
+                   modelos.lectura_web(modelos.para("investigar_oferta"), 3, blocked_domains=BLOQUEADOS)],
             output_config={"effort": "medium", "format": {"type": "json_schema", "schema": _esquema_investigacion()}},
             messages=mensajes)
         if r.stop_reason != "pause_turn":
@@ -233,7 +234,7 @@ def _filtrar(puestos, cola=(), motivos=None):
     return elegidos
 
 
-MODELO_CRIBA = "claude-haiku-5-5"  # modelo pequeño y barato: solo mira título, empresa y ubicación
+MODELO_CRIBA = modelos.para("criba_titulo")  # modelo pequeño y barato: solo mira título, empresa y ubicación
 
 CRIBA = """Eres el filtro rápido de Job Agent. Te paso puestos sacados de alertas de empleo (solo título, empresa y \
 ubicación) y lo que busca la persona. Para cada uno decide si MERECE investigarse a fondo (cuesta dinero): true si por \

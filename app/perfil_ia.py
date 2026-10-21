@@ -15,6 +15,7 @@ import unicodedata
 
 import datos
 import cv_ia
+import modelos
 
 DIR_CV = os.path.join(datos.RAIZ, "cv")
 RUTA_PERFIL = os.path.join(datos.RAIZ, "perfil", "perfil.md")
@@ -163,7 +164,7 @@ def _procesar(ruta):
                       f"\nArchivo: {os.path.basename(ruta)}. Analiza el CV y devuelve el perfil y el CV maestro."}]
         cliente = anthropic.Anthropic(api_key=cv_ia._api_key(), max_retries=3)
         with cliente.beta.messages.stream(
-            model=cv_ia.MODELO, max_tokens=32000,
+            model=modelos.para("perfil"), max_tokens=32000,
             betas=["server-side-fallback-2026-07-01"], fallbacks="default",
             system=INSTRUCCIONES.replace("<hoy>", datos.hoy()),
             output_config={"effort": "high", "format": {"type": "json_schema", "schema": _schema()}},

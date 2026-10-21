@@ -11,6 +11,7 @@ import threading
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import datos  # noqa: E402
 import cv_ia  # noqa: E402
+import modelos  # noqa: E402
 import busqueda_ia  # noqa: E402
 import gmail_lector  # noqa: E402
 import sugerencias_ia  # noqa: E402
@@ -400,7 +401,7 @@ def responder(conv, texto):
     respuesta = ""
     for _ in range(MAX_PASOS):
         r = cliente.beta.messages.create(
-            model=cv_ia.MODELO, max_tokens=8000, system=sistema, tools=_TOOLS, messages=trabajo,
+            model=modelos.para("chat"), max_tokens=8000, system=sistema, tools=_TOOLS, messages=trabajo,
             betas=["server-side-fallback-2026-07-01"], fallbacks="default",
             thinking={"type": "adaptive"}, output_config={"effort": "medium"},
         )

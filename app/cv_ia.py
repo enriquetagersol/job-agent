@@ -17,6 +17,7 @@ import threading
 import unicodedata
 
 import datos
+import modelos
 
 MODELO = "claude-opus-5-5"
 SERVICIO_LLAVERO = "job-agent-anthropic"
@@ -171,19 +172,19 @@ def _mensaje_oferta(cand, oferta, url="", desc=""):
 
 # ---------- llamada a la API ----------
 
-def _llamar(cliente, mensajes, sistema=None, web=True):
+def _llamar(cliente, mensajes, sistema=None, web=True, tarea="cv"):
     """Una vuelta con streaming. Reanuda si el servidor pausa el turno (pause_turn)."""
     import anthropic
     uso = {"in": 0, "out": 0, "cache_w": 0, "cache_r": 0}
     for _ in range(4):
         with cliente.beta.messages.stream(
-            model=MODELO,
+            model=modelos.para(tarea),
             max_tokens=32000,
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",  # si el modelo rechaza la petición, la reintenta otro modelo
             system=sistema or _sistema(),
-            output_config={"effort": "high", "format": {"type": "json_schema", "schema": _schema()}},
-            **({"tools": [{"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 3}]} if web else {}),
+            output_config={"effort": "medium", "format": {"type": "json_schema", "schema": _schema()}},
+            **({"tools": [modelos.lectura_web(modelos.para(tarea))]} if web else {}),
             messages=mensajes,
         ) as stream:
             resp = stream.get_final_message()
@@ -206,8 +207,8 @@ def _llamar(cliente, mensajes, sistema=None, web=True):
     raise RuntimeError("La lectura de la oferta no terminó tras varios intentos.")
 
 
-def _coste(uso):
-    return round(sum(uso[k] * PRECIOS[k] for k in uso) / 1e6, 3)
+def _coste(uso, tarea="cv"):
+    return modelos.coste(modelos.para(tarea), uso)
 
 
 # ---------- comprobaciones y renderizado ----------
@@ -364,7 +365,7 @@ def _generar_general(idioma=None):
         mensajes = [{"role": "user", "content": f"Haz mi CV general en {'inglés' if idioma == 'en' else 'español'} "
                                                 f"(idioma \"{idioma}\"). Puestos que busco: {puestos}."}]
         cliente = anthropic.Anthropic(api_key=_api_key(), max_retries=3)
-        res, resp, _ = _llamar(cliente, mensajes, sistema=sistema, web=False)
+        res, resp, _ = _llamar(cliente, mensajes, sistema=sistema, web=False, tarea="cv_general")
         carpeta = os.path.join(DIR_GENERAL, f"{_dt.datetime.now():%Y-%m-%d_%H%M}_{idioma}")
         os.makedirs(carpeta, exist_ok=True)
         nombre = unicodedata.normalize("NFKD", res["cv"]["nombre"]).encode("ascii", "ignore").decode()
@@ -376,7 +377,7 @@ def _generar_general(idioma=None):
             mensajes += [{"role": "assistant", "content": resp.content},
                          {"role": "user", "content": "No cabe en una página A4. Recórtalo quitando los bullets y "
                           "proyectos menos fuertes, sin cambiar nada más. Devuelve el resultado completo."}]
-            res, resp, _ = _llamar(cliente, mensajes, sistema=sistema, web=False)
+            res, resp, _ = _llamar(cliente, mensajes, sistema=sistema, web=False, tarea="cv_general")
             json.dump(res["cv"], open(ruta_json, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
             cabe = _render(ruta_json, ruta_pdf)
         notas = res["notas_md"]

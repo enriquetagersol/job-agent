@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import datos  # noqa: E402
 import cv_ia  # noqa: E402
+import modelos  # noqa: E402
 
 F_FICHAS = os.path.join(datos.DIR_DATOS, "empresas_fichas.json")
 ACTIVOS = ("por_aplicar", "enviada", "en_proceso", "oferta")
@@ -73,9 +74,9 @@ def _investigar(cliente, empresa, cands):
     mensajes = [{"role": "user", "content": _contexto(empresa, cands)}]
     for _ in range(4):  # la búsqueda web puede pausar el turno; se continúa
         r = cliente.beta.messages.create(
-            model=cv_ia.MODELO, max_tokens=3000, system=SISTEMA,
+            model=modelos.para("ficha_empresa"), max_tokens=3000, system=SISTEMA,
             betas=["server-side-fallback-2026-07-01"], fallbacks="default",
-            tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}],
+            tools=[modelos.busqueda_web(modelos.para("ficha_empresa"))],
             output_config={"effort": "low", "format": {"type": "json_schema", "schema": ESQUEMA}},
             messages=mensajes)
         if r.stop_reason != "pause_turn":

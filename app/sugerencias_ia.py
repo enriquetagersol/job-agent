@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import datos
 import cv_ia
+import modelos
 
 CERRADOS = {"rechazada", "retirada"}
 
@@ -56,7 +57,7 @@ def _reglas(c):
 
 def _claude(cliente, c):
     r = cliente.beta.messages.create(
-        model=cv_ia.MODELO, max_tokens=1500,
+        model=modelos.para("proximo_paso"), max_tokens=1500,
         betas=["server-side-fallback-2026-07-01"], fallbacks="default",
         system=SISTEMA.replace("<hoy>", datos.hoy()),
         output_config={"effort": "low", "format": {"type": "json_schema", "schema": ESQUEMA}},
