@@ -511,8 +511,8 @@ def _aviso_mac(texto):
                    capture_output=True, timeout=10)
 
 
-def _avisar(informe):
-    texto = resumen(informe)
+def _avisar(informe=None, texto=None):
+    texto = texto or resumen(informe)
     if not texto:
         return
     enviado = False
@@ -540,6 +540,7 @@ def _comprobar():
     with datos._lock:
         e = datos._leer(F_CORREO, {})
         e["history_id"] = nueva
+        e.pop("permiso_caducado", None)  # vuelve a funcionar: si caduca otra vez, se avisará de nuevo
         datos._escribir(F_CORREO, e)
 
 
@@ -558,6 +559,16 @@ def vigilar(intervalo=120, reintento=30, paso=10):
                         _comprobar()
                 except ValueError:
                     espera = reintento  # p. ej. ya hay una revisión en marcha
+                except gmail_lector.PermisoCaducado:
+                    espera = 1800  # no insiste; avisa una vez hasta que se vuelva a conectar
+                    with datos._lock:
+                        e = datos._leer(F_CORREO, {})
+                        avisado, e["permiso_caducado"] = e.get("permiso_caducado"), True
+                        datos._escribir(F_CORREO, e)
+                    if not avisado:
+                        _avisar(texto="⚠️ He perdido el acceso a tu Gmail (Google ha caducado el permiso), así que no "
+                                      "estoy leyendo tu correo. Para arreglarlo, abre «Conectar Gmail.command» en la "
+                                      "carpeta de Job Agent.")
                 except Exception:  # noqa: BLE001 - red caída, token caducado…
                     espera = reintento
                 proxima = time.time() + espera

@@ -512,6 +512,7 @@ function sinRespuesta(c) {
 }
 const lista = (xs) => xs.length <= 1 ? xs.join("") : xs.slice(0, -1).join(", ") + " y " + xs[xs.length - 1];
 const ORDEN_ESTADO = ["oferta", "en_proceso", "enviada", "por_aplicar", "rechazada", "retirada"];
+const GRUPOS_TABLA = ["oferta", "en_proceso", "enviada", "por_aplicar", "retirada", "rechazada"];
 
 const cerradaC = (c) => ["rechazada", "retirada"].includes(c.estado);
 const recorta = (t, n) => (t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t);
@@ -526,8 +527,8 @@ function textoEvento(e) {
 }
 
 // Ordenar por prioridad: arrastrar el asa ⠿ (ratón o dedo) o flechas ↑/↓ sobre ella (teclado)
-function guardarOrden() {
-  const ids = $$("#tabla-cand tbody tr[data-mov]").map((tr) => tr.dataset.id);
+function guardarOrden(grupo) {
+  const ids = $$(`#tabla-cand tbody tr[data-grupo="${grupo}"]`).map((tr) => tr.dataset.id);
   ids.forEach((id, i) => { const c = cand(id); if (c) c.prioridad = i; });
   api("POST", "/api/candidaturas/orden", { ids }).catch((e) => aviso("Error: " + e.message));
 }
@@ -541,14 +542,16 @@ function activarArrastre() {
       ev.preventDefault();  // escuchamos en window: mover la fila en el DOM anula la captura del puntero
       tr.classList.add("arrastrando"); let movida = false;
       const mover = (e) => {
-        const otras = $$("tr[data-mov]", cuerpo).filter((x) => x !== tr);
+        // solo dentro de su etapa
+        const otras = $$(`tr[data-grupo="${tr.dataset.grupo}"]`, cuerpo).filter((x) => x !== tr);
+        if (!otras.length) return;
         const antes = otras.find((x) => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
-        const destino = antes || (otras.length ? otras[otras.length - 1].nextSibling : null);
+        const destino = antes || otras[otras.length - 1].nextSibling;
         if (destino !== tr.nextSibling && destino !== tr) { cuerpo.insertBefore(tr, destino); movida = true; }
       };
       const soltar = () => {
         window.removeEventListener("pointermove", mover); window.removeEventListener("pointerup", soltar); window.removeEventListener("pointercancel", soltar);
-        tr.classList.remove("arrastrando"); if (movida) guardarOrden();
+        tr.classList.remove("arrastrando"); if (movida) guardarOrden(tr.dataset.grupo);
       };
       window.addEventListener("pointermove", mover); window.addEventListener("pointerup", soltar); window.addEventListener("pointercancel", soltar);
     });
@@ -557,9 +560,9 @@ function activarArrastre() {
       if (ev.key !== "ArrowUp" && ev.key !== "ArrowDown") return;
       ev.preventDefault(); ev.stopPropagation();
       const otro = ev.key === "ArrowUp" ? tr.previousElementSibling : tr.nextElementSibling;
-      if (!otro || !otro.hasAttribute("data-mov")) return;
+      if (!otro || otro.dataset.grupo !== tr.dataset.grupo) return;  // solo dentro de su etapa
       cuerpo.insertBefore(tr, ev.key === "ArrowUp" ? otro : otro.nextSibling);
-      asa.focus(); guardarOrden();
+      asa.focus(); guardarOrden(tr.dataset.grupo);
     });
   });
 }
@@ -606,12 +609,19 @@ function pintarDashboard() {
   }).join("");
 
   // Tabla de situación: abiertas por la prioridad que ella elige (arrastrando); cerradas al final
-  const auto = (a, b) => (ORDEN_ESTADO.indexOf(a.estado) - ORDEN_ESTADO.indexOf(b.estado))
-    || (sinRespuesta(b) - sinRespuesta(a)) || (a.fecha_actualizacion || "").localeCompare(b.fecha_actualizacion || "");
-  const prio = (c) => (c.prioridad ?? Infinity);
-  const abiertas = cs.filter((c) => !cerradaC(c)).sort((a, b) => (prio(a) - prio(b)) || auto(a, b));
-  const cerradas = cs.filter(cerradaC).sort((a, b) => (b.fecha_actualizacion || "").localeCompare(a.fecha_actualizacion || ""));
-  $("#tabla-cand tbody").innerHTML = [...abiertas, ...cerradas].map((c) => {
+  // Por etapa (Oferta → Entrevistas → Aplicada → Por aplicar → Retirada → Rechazada). Dentro de cada etapa manda su
+  // orden manual (arrastrando); lo que no ha ordenado (nuevo o recién cambiado de etapa) va arriba, lo más reciente primero.
+  const grupo = (c) => GRUPOS_TABLA.indexOf(c.estado);
+  const reciente = (a, b) => (b.fecha_actualizacion || "").localeCompare(a.fecha_actualizacion || "");
+  const enGrupo = (a, b) => {
+    const pa = a.prioridad ?? null, pb = b.prioridad ?? null;
+    if (pa === null && pb === null) return reciente(a, b);
+    if (pa === null) return -1;
+    if (pb === null) return 1;
+    return (pa - pb) || reciente(a, b);
+  };
+  const filas = [...cs].sort((a, b) => (grupo(a) - grupo(b)) || enGrupo(a, b));
+  $("#tabla-cand tbody").innerHTML = filas.map((c) => {
     const d = dias(c.fecha_actualizacion), tr = c.cv_trabajo || {}, ev = ultimaNovedad(c);
     const cuando = d === null ? "" : d === 0 ? "Hoy" : d === 1 ? "Ayer" : fechaCorta(c.fecha_actualizacion);
     const novedad = (ev ? `<div>${esc(recorta(textoEvento(ev), 90))}</div>` : "")
@@ -621,8 +631,8 @@ function pintarDashboard() {
       + (pp.fecha ? `<div class="cuando ${pp.fecha < E.estado.hoy ? "tarde" : ""}">${esc(fechaCorta(pp.fecha))}</div>` : "") : "";
     if (!paso && c.estado === "por_aplicar" && tr.estado === "generando") paso = "Creando tu CV…";
     const cerrada = cerradaC(c);
-    return `<tr class="${cerrada ? "cerrada" : ""}" data-abrir="${c.id}" data-id="${c.id}" tabindex="0" ${cerrada ? "" : "data-mov"}>
-      <td class="asa-col">${cerrada ? "" : `<button type="button" class="asa" aria-label="Mover ${esc(c.empresa)} (flechas arriba/abajo)" title="Arrastra para ordenar">⠿</button>`}</td>
+    return `<tr class="${cerrada ? "cerrada" : ""}" data-abrir="${c.id}" data-id="${c.id}" tabindex="0" data-mov data-grupo="${c.estado}">
+      <td class="asa-col"><button type="button" class="asa" aria-label="Mover ${esc(c.empresa)} dentro de su etapa (flechas arriba/abajo)" title="Arrastra para ordenar dentro de su etapa">⠿</button></td>
       <td class="t-emp">${esc(c.empresa)}</td><td>${esc(c.puesto)}</td>
       <td><span class="etapa e-${c.estado}">${NOMBRE[c.estado]}</span></td>
       <td class="t-nov">${novedad}</td><td class="t-paso">${paso || "—"}</td></tr>`;
@@ -671,6 +681,13 @@ function pintarCajon(c) {
 }
 function cerrarCajon() { $("#cajon").hidden = true; $("#velo").hidden = true; E.abierta = null; }
 $("#cajon-cerrar").addEventListener("click", cerrarCajon);
+// Borrar del todo (p. ej. si la añadiste por error y nunca aplicaste)
+$("#btn-borrar-cand").addEventListener("click", async () => {
+  const c = cand(E.abierta); if (!c) return;
+  if (!confirm(`¿Borrar la candidatura de ${c.empresa} (${c.puesto})?\n\nDesaparece del todo, también su historial. No se puede deshacer.\nSi solo has dejado el proceso, mejor márcala como «Retirada».`)) return;
+  try { await api("DELETE", "/api/candidaturas/" + c.id); cerrarCajon(); aviso(`🗑 ${c.empresa} borrada`); await recargar(); }
+  catch (e) { aviso("Error: " + e.message); }
+});
 $("#velo").addEventListener("click", cerrarCajon);
 document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("#cajon").hidden) cerrarCajon(); });
 // Si cambia el próximo paso, pasa a ser suyo (deja de ser una sugerencia)

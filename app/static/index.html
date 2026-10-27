@@ -53,7 +53,7 @@
     <div class="kpis" id="kpis"></div>
     <div class="panel"><h2>Candidaturas por etapa</h2><p class="sub">Cuántas hay en cada etapa</p><div class="embudo" id="embudo"></div></div>
     <div class="panel">
-      <h2>Situación</h2><p class="sub">Pulsa una candidatura para ver su detalle o apuntar una novedad. Arrastra ⠿ para ordenarlas por prioridad.</p>
+      <h2>Situación</h2><p class="sub">Pulsa una candidatura para ver su detalle o apuntar una novedad. Arrastra ⠿ para ordenarlas dentro de su etapa (tu orden manda; lo nuevo entra arriba).</p>
       <div class="tabla-envoltorio"><table class="tabla" id="tabla-cand">
         <thead><tr><th class="asa-col" aria-label="Prioridad"></th><th>Empresa</th><th>Puesto</th><th>Etapa</th><th>Última novedad</th><th>Próximo paso</th></tr></thead>
         <tbody></tbody>
@@ -92,6 +92,7 @@
     <h3>Historial</h3>
     <ol id="eventos"></ol>
   </div>
+  <button type="button" class="borrar-cand" id="btn-borrar-cand">🗑 Borrar candidatura</button>
 </aside>
 <div class="velo" id="velo" hidden></div>
 

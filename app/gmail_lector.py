@@ -86,8 +86,14 @@ def _post(url, campos):
         return json.load(r)
 
 
-def autorizar(ruta_cliente):
-    d = json.load(open(os.path.expanduser(ruta_cliente), encoding="utf-8"))
+def autorizar(ruta_cliente=None):
+    """Sin ruta, reutiliza el cliente guardado en el Llavero (para volver a conectar si Google caduca el permiso)."""
+    if ruta_cliente:
+        d = json.load(open(os.path.expanduser(ruta_cliente), encoding="utf-8"))
+    elif _llavero_leer(LLAVERO_CLIENTE):
+        d = json.loads(_llavero_leer(LLAVERO_CLIENTE))
+    else:
+        raise SystemExit("No hay ningún cliente de Google guardado: hace falta el JSON del cliente «App de escritorio».")
     if "installed" not in d:
         raise SystemExit("Ese archivo no es de un cliente «App de escritorio». Crea uno de ese tipo en Google Cloud.")
     c = d["installed"]
@@ -136,6 +142,10 @@ def autorizar(ruta_cliente):
     print("✅ Gmail conectado.")
 
 
+class PermisoCaducado(RuntimeError):
+    """Google ya no acepta el permiso guardado: hay que volver a conectar Gmail."""
+
+
 def _token():
     if _cache["token"] and time.time() < _cache["caduca"] - 60:
         return _cache["token"]
@@ -147,7 +157,7 @@ def _token():
                                    "refresh_token": refresco, "grant_type": "refresh_token"})
     except urllib.error.HTTPError as e:
         if e.code in (400, 401):
-            raise RuntimeError("Google ha caducado el permiso de Gmail: vuelve a «Conectar Gmail.command».")
+            raise PermisoCaducado("Google ha caducado el permiso de Gmail: vuelve a «Conectar Gmail.command».")
         raise
     _cache.update(token=t["access_token"], caduca=time.time() + t.get("expires_in", 3600))
     return _cache["token"]
@@ -295,6 +305,8 @@ def correos(desde=None, maximo=30):
 if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "--autorizar":
         autorizar(sys.argv[2])
+    elif sys.argv[1:] == ["--reconectar"]:
+        autorizar()
     elif sys.argv[1:] == ["--probar"]:
         ids = buscar("newer_than:2d -in:spam -in:trash -in:drafts", 10)
         print(f"Conexión correcta. Job Agent vigilará toda tu bandeja de entrada (no solo «{ETIQUETA}»).")

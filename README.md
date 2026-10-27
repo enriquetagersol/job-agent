@@ -19,22 +19,27 @@ I've been turned down.
 **What it does**
 - **Search:** careers pages of 145 companies across 7 recruiting platforms (Ashby, Greenhouse, Lever…).
   Each posting gets a 0–100 fit score, what I'd do, why it fits and why not.
-- **Learns:** every 👍/👎 and its reason updates my "learned signals" for the next searches.
+- **Master CV:** I can add projects, achievements or skills from the app or Slack; it proposes the change and only
+  saves it with my yes.
+- **Learns:** every 👍/👎 and its reason automatically updates my "learned signals" for the next searches.
 - **Tailored CV:** one page per opening, never inventing anything, with notes on what they value, what
-  changed and which gaps to prepare. It flags any figure that isn't in my CV.
+  changed and which gaps to prepare. It flags any figure that isn't in my CV. No link needed: a job description
+  pasted in Slack is enough. Plus a general one-page CV in English or Spanish, with notes on what it prioritised.
 - **Tracking:** a dashboard with today's to-dos, applications by stage and an AI-suggested next step.
 - **Company cards:** one card per company with an active application: what it does and for whom, type,
   size or funding, HQ, website and my roles there. Researched on the web automatically, once per company.
 - **Gmail:** checks the inbox every 2 minutes, detects interviews, rejections, offers and deadlines, and
-  updates the application. Read and label only.
+  updates the application. It also picks up emails restored from the trash. Read and label only.
 - **Slack:** 17 actions on my data from my phone ("I got rejected at X", "research this opening"…).
 
 **Product decisions:** the person decides (nothing important is saved without a yes) · no making things
-up · cost under control (free filters, then a ~$0.0005 title screening, then in-depth research in
-batches of 10) · privacy (runs locally; keys never leave the machine).
+up · cost under control (each task uses the right model: Haiku to classify emails, screen titles, suggest next
+steps, build company cards and chat; Sonnet to analyse openings and write CVs; searches filter by title before
+any in-depth analysis. An email ≈ $0.0005, a chat message ≈ $0.002, a CV ≈ $0.10–0.15) · privacy (runs locally;
+keys never leave the machine; email and web content is treated as data, never as instructions).
 
-**Built with:** Python, HTML/CSS/JS, Claude API and Claude Code, Gmail API (OAuth), Slack API (Socket
-Mode). ~5,200 lines in 16 modules. I designed the product, flows, rules and limits, built it with Claude
+**Built with:** Python, HTML/CSS/JS, Claude API (Haiku and Sonnet) and Claude Code, Gmail API (OAuth), Slack API (Socket
+Mode). ~5,300 lines in 17 modules. I designed the product, flows, rules and limits, built it with Claude
 Code as a copilot and validated it in daily, real use.
 
 ---
@@ -90,7 +95,7 @@ Tres pestañas:
    página, no optimizado para ninguna oferta, en inglés o español; Claude analiza el CV que subas y genera tu
    perfil y tu CV maestro; al subir uno nuevo se guarda copia de los anteriores en `perfil/historial/`),
    **🔍 Buscar ofertas** (descarga ofertas de ~145 empresas y Claude
-   analiza hasta 25 nuevas; 5-10 min, ≈ 1-2 $) y **⚙︎ Preferencias** (puestos, dónde, salario; y
+   filtra por título y analiza a fondo hasta 15 nuevas; 5-10 min; ver *Coste*) y **⚙︎ Preferencias** (puestos, dónde, salario; y
    sectores, qué valoras, qué evitas y qué descartas, que escribes con tus palabras y se convierten
    en etiquetas fijas). Debajo, *Resultados de búsqueda* y *Te interesa*: cada oferta dice **qué
    harías, por qué encaja y por qué no encaja**; pulsas **👍 Me interesa** o **👎 No me interesa** y
@@ -103,8 +108,8 @@ Tres pestañas:
 
 **CV adaptado desde la app:** Claude lee la oferta y adapta tu CV maestro sin inventar nada; en
 1-3 minutos tienes el PDF de una página y unas notas con lo que valoran, los cambios, lo que te
-falta y las cifras que debes comprobar. Usa tu API key de Claude (≈ 0,2-0,5 $ por CV con Claude
-Opus 5.5), igual que la búsqueda. **Primera vez:** doble clic en `Configurar API key.command` para guardarla en el
+falta y las cifras que debes comprobar. Usa tu API key de Claude (≈ 0,10-0,15 $ por CV con Claude
+Sonnet), igual que la búsqueda. **Primera vez:** doble clic en `Configurar API key.command` para guardarla en el
 Llavero de macOS (no queda en ningún archivo).
 
 ## El agente (en Claude Code, dentro de esta carpeta)
@@ -188,6 +193,9 @@ Conexión (una vez):
 3. **Clientes → Crear cliente → App de escritorio** → **Descargar JSON** (déjalo en Descargas).
 4. Doble clic en **`Conectar Gmail.command`**: abre el navegador para autorizar y prueba la lectura.
    El cliente y el token quedan en el Llavero; puedes borrar el JSON de Descargas.
+
+Si Google caduca el permiso, Job Agent te avisa (por Slack o con una notificación del Mac). Para arreglarlo,
+vuelve a hacer doble clic en `Conectar Gmail.command`: usa el cliente guardado y reinicia la app.
 
 El historial de las conversaciones se guarda en `datos/chat.json` (últimos mensajes; no se sube a GitHub).
 

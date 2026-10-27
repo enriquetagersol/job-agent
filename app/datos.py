@@ -186,6 +186,7 @@ def actualizar_candidatura(cid, nota=None, tocar_fecha=True, fecha_nota=None, or
                                  "texto": f"{ETIQUETAS_ESTADO[c['estado']]} → {ETIQUETAS_ESTADO[nuevo]}"})
             if nuevo == "enviada" and not c.get("fecha_aplicacion"):
                 c["fecha_aplicacion"] = cuando
+            c["prioridad"] = None  # cambia de etapa: entra en su nuevo grupo por fecha, no con el orden del anterior
         for k, v in campos.items():
             if (k in c or k in CAMPOS_EXTRA) and k not in ("id", "eventos"):
                 c[k] = v
@@ -214,8 +215,13 @@ def ordenar_candidaturas(ids):
 
 
 def borrar_candidatura(cid):
+    """Borra la candidatura del todo (con su historial). Si venía de una oferta, la oferta queda descartada para que
+    no vuelva a «Te interesa» ni a los resultados (sin aprender de ello: fue un error, no un gusto)."""
     with _lock:
         doc = _leer(F_CAND, {"candidaturas": [], "lecturas": []})
+        c = next((x for x in doc["candidaturas"] if x["id"] == cid), None)
+        if c is None:
+            raise KeyError(cid)
         doc["candidaturas"] = [x for x in doc["candidaturas"] if x["id"] != cid]
         _escribir(F_CAND, doc)
     with _lock:
@@ -223,7 +229,9 @@ def borrar_candidatura(cid):
         for o in od["ofertas"]:
             if o.get("candidatura_id") == cid:
                 o["candidatura_id"] = None
+                o["decision"] = {"valor": "no interesa", "motivo": "Candidatura borrada", "fecha": hoy(), "aprendida": True}
         _escribir(F_OFER, od)
+    return c
 
 
 # ---------- ofertas ----------

@@ -371,3 +371,5 @@ dialog h2 { margin-bottom: 4px; }
 .puestos-emp { display: grid; gap: 6px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--borde); }
 .puesto-emp { font-size: 13.5px; color: var(--texto); text-decoration: none; display: flex; gap: 8px; align-items: baseline; }
 .puesto-emp:hover { color: var(--acento); }
+.borrar-cand { margin-top: 18px; align-self: flex-start; color: var(--mal); border-color: color-mix(in srgb, var(--mal) 40%, var(--borde)); background: var(--superficie); }
+.borrar-cand:hover { background: var(--mal-suave); border-color: var(--mal); }
