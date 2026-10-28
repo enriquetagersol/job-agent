@@ -163,12 +163,24 @@ def _token():
     return _cache["token"]
 
 
+def _pedir(hacer_req, intentos=6):
+    """Hace la petición; si Google pide frenar (límite de peticiones por minuto), espera y sigue en vez de fallar."""
+    for n in range(intentos):
+        try:
+            with urllib.request.urlopen(hacer_req(), context=_ssl(), timeout=30) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            cuerpo = e.read().decode("utf-8", "ignore")
+            limite = e.code == 429 or (e.code == 403 and ("Quota exceeded" in cuerpo or "rateLimitExceeded" in cuerpo))
+            if not limite or n == intentos - 1:
+                raise urllib.error.HTTPError(e.url, e.code, f"{e.reason}: {cuerpo[:200]}", e.headers, None)
+            time.sleep(min(15 * 2 ** n, 120))
+
+
 def _api(ruta, **params):
     q = urllib.parse.urlencode(params, doseq=True)
-    req = urllib.request.Request(API + ruta + ("?" + q if q else ""),
-                                 headers={"Authorization": f"Bearer {_token()}"})
-    with urllib.request.urlopen(req, context=_ssl(), timeout=30) as r:
-        return json.load(r)
+    return json.loads(_pedir(lambda: urllib.request.Request(API + ruta + ("?" + q if q else ""),
+                                                            headers={"Authorization": f"Bearer {_token()}"})))
 
 
 # ---------- lectura ----------
@@ -254,11 +266,9 @@ def etiqueta_id(nombre=ETIQUETA):
 
 def etiquetar(mid, label_id):
     """Añade la etiqueta al mensaje. Es la ÚNICA escritura que hace Job Agent en Gmail."""
-    req = urllib.request.Request(API + f"messages/{mid}/modify", method="POST",
-                                 data=json.dumps({"addLabelIds": [label_id]}).encode(),
-                                 headers={"Authorization": f"Bearer {_token()}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, context=_ssl(), timeout=30) as r:
-        r.read()
+    _pedir(lambda: urllib.request.Request(
+        API + f"messages/{mid}/modify", method="POST", data=json.dumps({"addLabelIds": [label_id]}).encode(),
+        headers={"Authorization": f"Bearer {_token()}", "Content-Type": "application/json"}))
 
 
 def ultima_revision():

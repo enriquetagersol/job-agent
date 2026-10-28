@@ -19,6 +19,7 @@ import re
 import sys
 import threading
 import time
+import urllib.error
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import datos  # noqa: E402
@@ -222,7 +223,9 @@ def _filtrar(puestos, cola=(), motivos=None):
     for p in puestos:
         clave = _slug(p["empresa"]) + "|" + _slug(p["titulo"])
         motivo = ("ya lo tenías visto" if clave in vistas else
-                  "nivel senior o de responsable" if SENIOR.search(p["titulo"]) or busqueda_ia.TITULO_FUERA.search(p["titulo"]) else
+                  "nivel senior o de responsable" if SENIOR.search(p["titulo"]) else
+                  "fuera de lo que buscas (prácticas, graduados, manager u otro idioma/mercado)"
+                  if busqueda_ia.TITULO_FUERA.search(p["titulo"]) else
                   f"ubicación ({p['ubicacion']})" if p["ubicacion"] and not busqueda_ia._ubicacion_valida(p["ubicacion"], pref) else
                   "ya aplicaste" if busqueda_ia._ya_aplicada({"company": p["empresa"], "title": p["titulo"]}, cands) else "")
         if motivo:
@@ -402,6 +405,16 @@ def _marcar_ofertas_correo(n):
 EXCLUIR = {"DRAFT", "SPAM", "TRASH", "CATEGORY_PROMOTIONS", "CATEGORY_FORUMS"}
 
 
+def _leer_si_existe(mid):
+    """Lee un correo; None si ya no existe (borradores o correos borrados que el historial de Gmail sigue listando)."""
+    try:
+        return gmail_lector.leer(mid)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
 def revisar(notificar=True, simular=False, desde=None, ids=None):
     """Revisa el correo nuevo: los mensajes `ids` (los que acaban de llegar) o, si no, todo lo recibido desde la
     última revisión. `simular=True` no etiqueta, no cambia datos ni avisa (para probar)."""
@@ -426,8 +439,8 @@ def revisar(notificar=True, simular=False, desde=None, ids=None):
                                       f"-category:promotions -category:forums", MAX_CORREOS)
         else:
             inicio = None
-        mensajes = [m for m in (gmail_lector.leer(i) for i in ids if i not in hecho)
-                    if (inicio is None or m["fecha"] >= inicio) and not EXCLUIR & set(m["etiquetas"])]
+        mensajes = [m for m in (_leer_si_existe(i) for i in ids if i not in hecho)
+                    if m and (inicio is None or m["fecha"] >= inicio) and not EXCLUIR & set(m["etiquetas"])]
         mensajes.sort(key=lambda m: m["fecha"])
         cands = datos.candidaturas()
         empresas = {_slug(c["empresa"]) for c in cands}
@@ -569,8 +582,10 @@ def vigilar(intervalo=120, reintento=30, paso=10):
                         _avisar(texto="⚠️ He perdido el acceso a tu Gmail (Google ha caducado el permiso), así que no "
                                       "estoy leyendo tu correo. Para arreglarlo, abre «Conectar Gmail.command» en la "
                                       "carpeta de Job Agent.")
-                except Exception:  # noqa: BLE001 - red caída, token caducado…
+                except Exception as e:  # noqa: BLE001 - red caída, recién despierto sin wifi…
                     espera = reintento
+                    print(f"Correo: la revisión falló ({type(e).__name__}: {str(e)[:300]}); reintento en {reintento} s",
+                          flush=True)
                 proxima = time.time() + espera
             time.sleep(paso)
     threading.Thread(target=bucle, daemon=True).start()
