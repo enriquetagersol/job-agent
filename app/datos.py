@@ -286,7 +286,9 @@ def decidir_oferta(oid, valor, motivo=""):
         c = next((x for x in candidaturas() if x["id"] == o["candidatura_id"]), None)
         if c and c["estado"] == "por_aplicar":
             actualizar_candidatura(c["id"], estado="retirada", nota="Ya no le interesa")
-    if valor == "interesa" and not o.get("candidatura_id"):
+    previa = next((x for x in candidaturas() if x["id"] == o.get("candidatura_id")), None)
+    if valor == "interesa" and (not previa or previa["estado"] in ("rechazada", "retirada")):
+        # Sin candidatura, o la que tenía está cerrada (p. ej. la rechazaron antes y vuelve a intentarlo): una nueva
         c = crear_candidatura(o["empresa"], o["puesto"], estado="por_aplicar",
                               url=o["url"] if (o["url"] or "").startswith("http") else "", oferta_id=o["id"],
                               detalle=f"Desde ofertas (encaje {o.get('encaje')})")

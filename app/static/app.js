@@ -80,12 +80,21 @@ document.addEventListener("click", (ev) => {
 
 const esNueva = (o) => !!o.lote && o.lote === E.estado.ultimo_lote && !o.decision;
 const resultados = () => E.estado.ofertas.filter((o) => o.estado_analisis === "recomendada" && !o.decision);
-// «Te interesa» = te interesan y aún no las has enviado. En cuanto avanzan, viven solo en Mis candidaturas.
-const guardados = () => E.estado.ofertas.filter((o) => {
-  if (!o.decision || o.decision.valor !== "interesa") return false;
-  const c = o.candidatura_id && cand(o.candidatura_id);
-  return !c || c.estado === "por_aplicar";
-});
+// «Te interesa» = te interesan y aún no las has enviado (todo lo «Por aplicar», venga de una búsqueda, de Slack o
+// de la app). Las que tienen oferta analizada salen con su ficha; las demás, con una tarjeta sencilla.
+// En cuanto avanzan, viven solo en Mis candidaturas.
+const guardados = () => {
+  const ofs = E.estado.ofertas.filter((o) => {
+    if (!o.decision || o.decision.valor !== "interesa") return false;
+    const c = o.candidatura_id && cand(o.candidatura_id);
+    return !c || c.estado === "por_aplicar";
+  });
+  const conFicha = new Set(ofs.map((o) => o.candidatura_id).filter(Boolean));
+  const sueltas = E.estado.candidaturas.filter((c) => c.estado === "por_aplicar" && !conFicha.has(c.id))
+    .map((c) => ({ ...(E.estado.ofertas.find((o) => o.id === c.oferta_id) || {}), id: "cand-" + c.id, soloCand: c,
+                   empresa: c.empresa, puesto: c.puesto, url: c.url || "", candidatura_id: c.id }));
+  return [...ofs, ...sueltas];
+};
 
 function pintar() {
   const n = resultados().length;
@@ -409,10 +418,19 @@ $("#dlg-pref").addEventListener("close", async () => {
 function tarjetaOferta(o) {
   const s = o.sencillo || {};
   const nivel = o.encaje >= 70 ? "alto" : o.encaje >= 55 ? "medio" : "bajo";
-  const secciones = [["que_harias", "Qué harías", ""], ["por_que_encaja", "Por qué encaja", "si"], ["por_que_no_encaja", "Por qué no encaja", "no"]]
-    .map(([k, t, cls]) => `<div class="${cls}"><b>${t}</b>${md(s[k] || (k === "por_que_no_encaja" ? s.gaps : "") || "—")}</div>`).join("");
+  const secciones = o.soloCand && !o.sencillo
+    ? `<div><b>Tus notas</b>${md(o.soloCand.detalle || o.soloCand.descripcion || "Sin analizar todavía: pídele a Job Agent por Slack que investigue la oferta si quieres su ficha.")}</div>`
+    : [["que_harias", "Qué harías", ""], ["por_que_encaja", "Por qué encaja", "si"], ["por_que_no_encaja", "Por qué no encaja", "no"]]
+      .map(([k, t, cls]) => `<div class="${cls}"><b>${t}</b>${md(s[k] || (k === "por_que_no_encaja" ? s.gaps : "") || "—")}</div>`).join("");
   let pie;
-  if (o.decision && o.decision.valor === "interesa") {
+  if (o.soloCand) {
+    // Candidatura «Por aplicar» sin oferta analizada (p. ej. creada desde Slack): mismos botones
+    const c = o.soloCand, creando = (c.cv_trabajo || {}).estado === "generando";
+    pie = `<div class="decision">
+      <button class="primario" data-cv="${c.id}">${creando ? '<span class="girando"></span>Creando tu CV…' : "📄 CV optimizado"}</button>
+      <button class="aplicada" data-aplicada="${c.id}">✅ Aplicada</button>
+      <button class="no-interesa" data-quitar-cand="${c.id}">👎 Ya no me interesa</button></div>`;
+  } else if (o.decision && o.decision.valor === "interesa") {
     // «Te interesa»: CV optimizado (vista previa), marcarla como aplicada o descartarla
     const c = o.candidatura_id && cand(o.candidatura_id), tr = (c && c.cv_trabajo) || {};
     const creando = c && tr.estado === "generando";
@@ -445,6 +463,11 @@ function pintarOfertas() {
   $("#lista-ofertas").innerHTML = os.length ? os.map(tarjetaOferta).join("") : `<div class="vacio">${vacio}</div>`;
   $$("[data-decidir]").forEach((b) => b.addEventListener("click", () => pedirMotivo(b.dataset.decidir, b.dataset.v)));
   $$("[data-quitar]").forEach((b) => b.addEventListener("click", () => pedirMotivo(b.dataset.quitar, "no interesa")));
+  $$("[data-quitar-cand]").forEach((b) => b.addEventListener("click", () => {
+    const c = cand(b.dataset.quitarCand);
+    if (confirm(`¿Ya no te interesa ${c.empresa}? Pasará a «Retirada» en Mis candidaturas.`))
+      cambiar(c.id, { estado: "retirada", nota: "Ya no le interesa" }, `👎 ${c.empresa}: retirada`);
+  }));
   $$("[data-cv]").forEach((b) => b.addEventListener("click", () => abrirCvPrevia(b.dataset.cv)));
   $$("[data-aplicada]").forEach((b) => b.addEventListener("click", async () => {
     const c = cand(b.dataset.aplicada);
