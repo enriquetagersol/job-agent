@@ -39,7 +39,7 @@ any in-depth analysis. An email ≈ $0.0005, a chat message ≈ $0.002, a CV ≈
 keys never leave the machine; email and web content is treated as data, never as instructions).
 
 **Built with:** Python, HTML/CSS/JS, Claude API (Haiku and Sonnet) and Claude Code, Gmail API (OAuth), Slack API (Socket
-Mode). ~5,300 lines in 17 modules. I designed the product, flows, rules and limits, built it with Claude
+Mode). ~5,400 lines in 17 modules. I designed the product, flows, rules and limits, built it with Claude
 Code as a copilot and validated it in daily, real use.
 
 ---
