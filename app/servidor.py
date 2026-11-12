@@ -166,17 +166,28 @@ class Manejador(BaseHTTPRequestHandler):
             return self._escritura(lambda: (busqueda_ia.lanzar(), {"ok": True})[1])
         if len(p) == 4 and p[:2] == ["api", "candidaturas"] and p[3] == "analizar":
             def analizar():
-                # Ficha del puesto de una candidatura (qué harías, por qué encaja…): la busca en la web o usa el texto pegado
+                # Ficha del puesto de una candidatura (qué harías, por qué encaja…). Primero guarda lo que ella haya
+                # corregido (empresa, puesto, enlace, descripción); luego busca la oferta en la web o analiza el texto.
                 import correo_ia
-                c = next((x for x in datos.candidaturas() if x["id"] == p[2]), None)
-                if c is None:
+                b = self._cuerpo()
+                if not any(x["id"] == p[2] for x in datos.candidaturas()):
                     raise KeyError(p[2])
-                texto = (self._cuerpo().get("texto") or "").strip()
-                o = correo_ia.investigar_oferta(url=c.get("url") or "", empresa=c["empresa"], puesto=c["puesto"],
-                                                texto=texto or c.get("descripcion") or "")
-                datos.enlazar_oferta(c["id"], o["id"])
-                if len(texto) >= 300 and not c.get("descripcion"):
-                    datos.actualizar_candidatura(c["id"], tocar_fecha=False, descripcion=texto)
+                cambios = {k: str(b[k]).strip() for k in ("empresa", "puesto", "url", "descripcion") if k in b}
+                if cambios.get("empresa") == "" or cambios.get("puesto") == "":
+                    raise ValueError("La empresa y el puesto no pueden quedar vacíos.")
+                if cambios:
+                    datos.actualizar_candidatura(p[2], tocar_fecha=False, ficha_no_encontrada=None, **cambios)
+                if b.get("solo_guardar"):
+                    return {"ok": True}
+                c = next(x for x in datos.candidaturas() if x["id"] == p[2])
+                try:
+                    o = correo_ia.investigar_oferta(url=c.get("url") or "", empresa=c["empresa"], puesto=c["puesto"],
+                                                    texto=c.get("descripcion") or "")
+                except ValueError:
+                    datos.actualizar_candidatura(p[2], tocar_fecha=False, ficha_no_encontrada=datos.hoy())
+                    raise
+                datos.enlazar_oferta(p[2], o["id"])
+                datos.actualizar_candidatura(p[2], tocar_fecha=False, ficha_no_encontrada=None)
                 return {"ok": True, "oferta": o["id"]}
             return self._escritura(analizar)
         if len(p) == 4 and p[:2] == ["api", "candidaturas"] and p[3] == "cv":

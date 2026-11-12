@@ -114,15 +114,18 @@
 
 <!-- Analizar el puesto de una candidatura ya aplicada -->
 <dialog id="dlg-analizar">
-  <form method="dialog" class="form">
-    <h2>Analizar el puesto</h2>
-    <p class="sub" id="analizar-titulo"></p>
-    <p class="sub">Busco la oferta en la web y te hago su ficha: qué harías, por qué encaja y por qué no. Si ya está
-      cerrada, pega aquí su descripción (opcional).</p>
-    <textarea id="analizar-texto" rows="6" placeholder="Descripción de la oferta (opcional)"></textarea>
+  <form method="dialog" class="form" id="form-ficha">
+    <h2>El puesto</h2>
+    <p class="sub">Corrige el puesto si no está bien escrito, o pega la descripción de la oferta si ya está cerrada.
+      Con eso te hago su ficha: qué harías, por qué encaja y por qué no.</p>
+    <label>Empresa<input name="empresa"></label>
+    <label>Puesto<input name="puesto"></label>
+    <label>Enlace de la oferta (opcional)<input name="url" placeholder="https://…"></label>
+    <label>Descripción de la oferta (opcional)<textarea name="descripcion" rows="6" placeholder="Pega aquí el texto de la oferta"></textarea></label>
     <div class="botones">
       <button value="cancelar">Cancelar</button>
-      <button value="ok" class="primario">🔍 Analizar</button>
+      <button value="guardar">Guardar sin analizar</button>
+      <button value="ok" class="primario">🔍 Guardar y analizar</button>
     </div>
   </form>
 </dialog>

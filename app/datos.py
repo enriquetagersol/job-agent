@@ -128,7 +128,7 @@ def crear_candidatura(empresa, puesto, estado="por_aplicar", **campos):
         return c
 
 
-CAMPOS_EXTRA = {"cv_trabajo", "prioridad", "descripcion"}  # campos opcionales que pueden no existir en candidaturas antiguas
+CAMPOS_EXTRA = {"cv_trabajo", "prioridad", "descripcion", "ficha_no_encontrada"}  # campos opcionales que pueden no existir en candidaturas antiguas
 
 
 def info_oferta(c):

@@ -430,11 +430,7 @@ function tarjetaOferta(o) {
   const s = o.sencillo || {};
   const nivel = o.encaje >= 70 ? "alto" : o.encaje >= 55 ? "medio" : "bajo";
   const sinFicha = (o.soloCand || o.aplicada) && !o.sencillo;
-  const secciones = o.aplicada && sinFicha
-    ? (E.analizando === o.aplicada.id
-        ? `<div><b>Analizando el puesto…</b>Busco la oferta y la analizo con tu perfil. Tarda 1-2 minutos.</div>`
-        : `<div><b>Sin ficha todavía</b>${md(o.aplicada.detalle || "No guardé qué era este puesto.")}</div>
-           <div><button class="secundario" data-analizar="${o.aplicada.id}">🔍 Analizar puesto</button></div>`)
+  const secciones = o.aplicada && sinFicha ? sinFichaAplicada(o.aplicada)
     : o.soloCand && !o.sencillo
     ? `<div><b>Tus notas</b>${md(o.soloCand.detalle || o.soloCand.descripcion || "Sin analizar todavía: pídele a Job Agent por Slack que investigue la oferta si quieres su ficha.")}</div>`
     : [["que_harias", "Qué harías", ""], ["por_que_encaja", "Por qué encaja", "si"], ["por_que_no_encaja", "Por qué no encaja", "no"]]
@@ -442,7 +438,7 @@ function tarjetaOferta(o) {
   let pie;
   if (o.aplicada) {
     const c = o.aplicada;
-    pie = `<div class="decision aplicada-pie"><span class="etapa e-${c.estado}">${NOMBRE[c.estado]}</span>
+    pie = `${o.sencillo ? "" : accionesFicha(c)}<div class="decision aplicada-pie"><span class="etapa e-${c.estado}">${NOMBRE[c.estado]}</span>
       ${c.fecha_aplicacion ? `<span class="cuando">Aplicaste el ${fechaCorta(c.fecha_aplicacion)}</span>` : ""}
       ${c.cv_adaptado ? `<button data-cv="${c.id}">📄 CV que enviaste</button>` : ""}
       <button data-abrir="${c.id}">Ver candidatura</button></div>`;
@@ -472,6 +468,28 @@ function tarjetaOferta(o) {
       ${o.datos ? `<div class="of-datos">${esc(o.datos)}</div>` : ""}</div></div>
     <div class="sencillo">${o.empresa_desc ? `<div class="empresa-desc"><b>La empresa</b>${md(o.empresa_desc)}</div>` : ""}${secciones}</div>${pie}</article>`;
 }
+// Puesto aplicado sin ficha: buscarla por puesto y empresa, o corregir el puesto / pegar la descripción
+function sinFichaAplicada(c) {
+  if (E.analizando === c.id) return `<div><b>Buscando la oferta…</b>La busco en la web por el puesto y la empresa y la analizo con tu perfil. Tarda 1-2 minutos.</div>`;
+  const texto = c.descripcion ? `<div><b>Tu descripción</b>${md(c.descripcion)}</div>`
+    : c.ficha_no_encontrada ? `<div class="no"><b>No la encontré</b>Puede que la oferta ya esté cerrada o que el puesto no esté bien escrito. Corrígelo o pega su descripción.</div>`
+    : `<div><b>Sin ficha todavía</b>Puedo buscar la oferta en la web por el puesto y la empresa.</div>`;
+  return texto;
+}
+function accionesFicha(c) {
+  if (E.analizando === c.id) return "";
+  const buscar = c.ficha_no_encontrada && !c.descripcion ? "" : `<button class="primario" data-buscar-ficha="${c.id}">🔍 ${c.descripcion ? "Analizar" : "Buscar la oferta"}</button>`;
+  return `<div class="acciones-ficha">${buscar}<button data-editar-ficha="${c.id}">✏️ ${c.ficha_no_encontrada ? "Añadirla tú" : "Editar o pegar descripción"}</button></div>`;
+}
+async function buscarFicha(id, cuerpo = {}) {
+  E.analizando = id; pintarOfertas();
+  try {
+    await api("POST", `/api/candidaturas/${id}/analizar`, cuerpo);
+    aviso(`🔍 Ficha de ${cand(id).empresa} lista`);
+  } catch (e) { aviso(e.message); }
+  E.analizando = null; await recargar();
+}
+
 function pintarOfertas() {
   const res = resultados(), gua = guardados(), apl = aplicadas();
   $$("#filtro-ofertas button").forEach((b) => {
@@ -483,12 +501,25 @@ function pintarOfertas() {
   if (E.filtroOf === "aplicadas") {
     const q = busca.value.trim().toLowerCase();
     const lista = apl.filter((o) => !q || `${o.empresa} ${o.puesto}`.toLowerCase().includes(q));
+    $("#lista-ofertas").classList.add("aplicadas");
     $("#lista-ofertas").innerHTML = lista.length ? lista.map(tarjetaOferta).join("")
       : `<div class="vacio">${q ? "Ningún puesto coincide con la búsqueda." : "Aún no has aplicado a ningún puesto."}</div>`;
     $$("[data-cv]").forEach((b) => b.addEventListener("click", () => abrirCvPrevia(b.dataset.cv)));
-    $$("[data-analizar]").forEach((b) => b.addEventListener("click", () => pedirAnalisis(b.dataset.analizar)));
+    $$("[data-buscar-ficha]").forEach((b) => b.addEventListener("click", () => buscarFicha(b.dataset.buscarFicha)));
+    $$("[data-editar-ficha]").forEach((b) => b.addEventListener("click", () => editarFicha(b.dataset.editarFicha)));
+    // Todas las tarjetas del mismo alto: el texto largo se recorta y se despliega con «Ver todo»
+    $$("#lista-ofertas .sencillo").forEach((s) => {
+      if (s.scrollHeight <= s.clientHeight + 4) return;
+      s.classList.add("recortada");
+      s.insertAdjacentHTML("afterend", '<button class="ver-todo">Ver todo ▾</button>');
+      s.nextElementSibling.addEventListener("click", (ev) => {
+        const abierta = s.classList.toggle("abierta");
+        ev.target.textContent = abierta ? "Ver menos ▴" : "Ver todo ▾";
+      });
+    });
     return;
   }
+  $("#lista-ofertas").classList.remove("aplicadas");
   // Las nuevas primero; dentro de cada grupo, por encaje
   const os = (E.filtroOf === "resultados" ? res : gua).sort((a, b) => (esNueva(b) - esNueva(a)) || ((b.encaje ?? -1) - (a.encaje ?? -1)));
   const vacio = E.filtroOf === "resultados"
@@ -512,22 +543,19 @@ function pintarOfertas() {
 function filtro(f) { E.filtroOf = f; pintarOfertas(); }
 $("#buscar-aplicadas").addEventListener("input", pintarOfertas);
 
-// Analizar el puesto de una candidatura ya aplicada (solo al pulsar: busca la oferta en la web o usa el texto pegado)
-function pedirAnalisis(id) {
-  const c = cand(id); E.porAnalizar = id;
-  $("#analizar-titulo").textContent = `${c.puesto} · ${c.empresa}`;
-  $("#analizar-texto").value = c.descripcion || "";
+// Corregir empresa/puesto/enlace o pegar la descripción de un puesto aplicado; luego guardar o analizar
+function editarFicha(id) {
+  const c = cand(id), f = $("#form-ficha"); E.porAnalizar = id;
+  f.empresa.value = c.empresa; f.puesto.value = c.puesto; f.url.value = c.url || ""; f.descripcion.value = c.descripcion || "";
   $("#dlg-analizar").returnValue = ""; $("#dlg-analizar").showModal();
 }
 $("#dlg-analizar").addEventListener("close", async () => {
-  const id = E.porAnalizar; E.porAnalizar = null;
-  if (!id || $("#dlg-analizar").returnValue !== "ok") return;
-  E.analizando = id; pintarOfertas();
-  try {
-    await api("POST", `/api/candidaturas/${id}/analizar`, { texto: $("#analizar-texto").value });
-    aviso(`🔍 Ficha de ${cand(id).empresa} lista`);
-  } catch (e) { aviso(e.message); }
-  E.analizando = null; await recargar();
+  const id = E.porAnalizar, accion = $("#dlg-analizar").returnValue, f = $("#form-ficha"); E.porAnalizar = null;
+  if (!id || !["guardar", "ok"].includes(accion)) return;
+  const cuerpo = { empresa: f.empresa.value, puesto: f.puesto.value, url: f.url.value, descripcion: f.descripcion.value };
+  if (accion === "ok") return buscarFicha(id, cuerpo);
+  try { await api("POST", `/api/candidaturas/${id}/analizar`, { ...cuerpo, solo_guardar: true }); aviso("Guardado"); await recargar(); }
+  catch (e) { aviso("Error: " + e.message); }
 });
 $$("#filtro-ofertas button").forEach((b) => b.addEventListener("click", () => filtro(b.dataset.f)));
 
