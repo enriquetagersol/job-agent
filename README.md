@@ -25,7 +25,8 @@ I've been turned down.
 - **Tailored CV:** one page per opening, never inventing anything, with notes on what they value, what
   changed and which gaps to prepare. It flags any figure that isn't in my CV. No link needed: a job description
   pasted in Slack is enough. Plus a general one-page CV in English or Spanish, with notes on what it prioritised.
-- **Tracking:** a dashboard with today's to-dos, applications by stage and an AI-suggested next step.
+- **Tracking:** a dashboard with today's to-dos, applications by stage and an AI-suggested next step. An
+  "Applied" tab keeps every role I've applied to with its card; missing cards are looked up on the web automatically.
 - **Company cards:** one card per company with an active application: what it does and for whom, type,
   size or funding, HQ, website and my roles there. Researched on the web automatically, once per company.
 - **Gmail:** checks the inbox every 2 minutes, detects interviews, rejections, offers and deadlines, and
@@ -39,7 +40,7 @@ any in-depth analysis. An email ≈ $0.0005, a chat message ≈ $0.002, a CV ≈
 keys never leave the machine; email and web content is treated as data, never as instructions).
 
 **Built with:** Python, HTML/CSS/JS, Claude API (Haiku and Sonnet) and Claude Code, Gmail API (OAuth), Slack API (Socket
-Mode). ~5,400 lines in 17 modules. I designed the product, flows, rules and limits, built it with Claude
+Mode). ~5,600 lines in 18 modules. I designed the product, flows, rules and limits, built it with Claude
 Code as a copilot and validated it in daily, real use.
 
 ---
@@ -97,10 +98,12 @@ Tres pestañas:
    **🔍 Buscar ofertas** (descarga ofertas de ~145 empresas y Claude
    filtra por título y analiza a fondo hasta 15 nuevas; 5-10 min; ver *Coste*) y **⚙︎ Preferencias** (puestos, dónde, salario; y
    sectores, qué valoras, qué evitas y qué descartas, que escribes con tus palabras y se convierten
-   en etiquetas fijas). Debajo, *Resultados de búsqueda* y *Te interesa*: cada oferta dice **qué
+   en etiquetas fijas). Debajo, *Resultados de búsqueda*, *Te interesa* y *Aplicadas*: cada oferta dice **qué
    harías, por qué encaja y por qué no encaja**; pulsas **👍 Me interesa** o **👎 No me interesa** y
    una ventana te pregunta el porqué (opcional). *Te interesa* son las que te interesan y aún no has
-   enviado; las que no te interesan desaparecen.
+   enviado; las que no te interesan desaparecen. *Aplicadas* es el registro de cada puesto al que has aplicado
+   (siga abierto o no) con su ficha, etapa, fecha, el CV enviado y un buscador; si falta la ficha, la busca sola en la
+   web una vez y, si no la encuentra, puedes pegar la descripción.
 3. **Empresas** — una ficha por cada empresa en la que tienes una candidatura por aplicar, aplicada, en
    entrevistas o con oferta, de la más avanzada a la menos: qué hace y para quién, tipo (startup, scale-up,
    big tech…), tamaño o financiación, sede, web y tus puestos allí con su etapa. Se investigan solas en la web
