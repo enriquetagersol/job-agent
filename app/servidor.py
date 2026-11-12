@@ -19,7 +19,7 @@ API
 Para escalar a la app completa, añade aquí rutas como POST /api/buscar o /api/adaptar-cv que
 llamen a la API de Claude y escriban con app/datos.py; la interfaz no necesita cambiar.
 """
-import argparse, json, mimetypes, os, sys, threading, webbrowser
+import argparse, json, mimetypes, os, sys, threading, time, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
@@ -32,6 +32,7 @@ import perfil_ia  # noqa: E402
 import sugerencias_ia  # noqa: E402
 import aprendizaje_ia  # noqa: E402
 import fichas_empresas  # noqa: E402
+import fichas_puestos  # noqa: E402
 
 ESTATICOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 ARCHIVOS_PERMITIDOS = [os.path.join(datos.RAIZ, "cv"), os.path.join(datos.RAIZ, "resultados")]
@@ -99,7 +100,8 @@ class Manejador(BaseHTTPRequestHandler):
             correo = datos._leer(os.path.join(datos.DIR_DATOS, "correo_estado.json"), {})
             return self._json(200, {**datos.estado_completo(), "ia": {"disponible": ok, "motivo": motivo},
                                     "perfil": perfil_ia.estado(), "aviso_correo": correo.get("ofertas_correo", {}),
-                                    "cv_general": cv_ia.estado_general(), "empresas": fichas_empresas.para_la_app()})
+                                    "cv_general": cv_ia.estado_general(), "empresas": fichas_empresas.para_la_app(),
+                                    "buscando_fichas": sorted(fichas_puestos.buscando)})
         if ruta.startswith("/archivo/"):
             destino = os.path.realpath(os.path.join(datos.RAIZ, unquote(ruta[len("/archivo/"):])))
             if not any(destino.startswith(os.path.realpath(p) + os.sep) for p in ARCHIVOS_PERMITIDOS):
@@ -166,29 +168,11 @@ class Manejador(BaseHTTPRequestHandler):
             return self._escritura(lambda: (busqueda_ia.lanzar(), {"ok": True})[1])
         if len(p) == 4 and p[:2] == ["api", "candidaturas"] and p[3] == "analizar":
             def analizar():
-                # Ficha del puesto de una candidatura (qué harías, por qué encaja…). Primero guarda lo que ella haya
-                # corregido (empresa, puesto, enlace, descripción); luego busca la oferta en la web o analiza el texto.
-                import correo_ia
+                # Ficha del puesto (qué harías, por qué encaja…): guarda lo corregido y busca la oferta o analiza el texto
                 b = self._cuerpo()
-                if not any(x["id"] == p[2] for x in datos.candidaturas()):
-                    raise KeyError(p[2])
-                cambios = {k: str(b[k]).strip() for k in ("empresa", "puesto", "url", "descripcion") if k in b}
-                if cambios.get("empresa") == "" or cambios.get("puesto") == "":
-                    raise ValueError("La empresa y el puesto no pueden quedar vacíos.")
-                if cambios:
-                    datos.actualizar_candidatura(p[2], tocar_fecha=False, ficha_no_encontrada=None, **cambios)
-                if b.get("solo_guardar"):
-                    return {"ok": True}
-                c = next(x for x in datos.candidaturas() if x["id"] == p[2])
-                try:
-                    o = correo_ia.investigar_oferta(url=c.get("url") or "", empresa=c["empresa"], puesto=c["puesto"],
-                                                    texto=c.get("descripcion") or "")
-                except ValueError:
-                    datos.actualizar_candidatura(p[2], tocar_fecha=False, ficha_no_encontrada=datos.hoy())
-                    raise
-                datos.enlazar_oferta(p[2], o["id"])
-                datos.actualizar_candidatura(p[2], tocar_fecha=False, ficha_no_encontrada=None)
-                return {"ok": True, "oferta": o["id"]}
+                o = fichas_puestos.analizar(p[2], {k: b[k] for k in ("empresa", "puesto", "url", "descripcion") if k in b},
+                                            solo_guardar=bool(b.get("solo_guardar")))
+                return {"ok": True, "oferta": o and o["id"]}
             return self._escritura(analizar)
         if len(p) == 4 and p[:2] == ["api", "candidaturas"] and p[3] == "cv":
             def lanzar_cv():
@@ -229,6 +213,7 @@ class Manejador(BaseHTTPRequestHandler):
                     sugerencias_ia.sugerir_en_segundo_plano(p[2])
                 if b.get("estado"):
                     fichas_empresas.completar_en_segundo_plano()
+                    fichas_puestos.completar_en_segundo_plano()
                 return c
             return self._escritura(act)
         return self._json(404, {"error": "no encontrado"})
@@ -276,6 +261,12 @@ def main():
     threading.Thread(target=lambda: __import__("anthropic"), daemon=True).start()
     import correo_ia
     correo_ia.vigilar(intervalo=120)
+    # Fichas de los puestos aplicados que aún no la tienen (también las que llegan por correo o Slack)
+    def fichas_puestos_bucle():
+        while True:
+            fichas_puestos.completar_en_segundo_plano()
+            time.sleep(1800)
+    threading.Thread(target=fichas_puestos_bucle, daemon=True).start()
     fichas_empresas.vigilar()  # fichas de las empresas de sus candidaturas activas (pestaña Empresas)  # con Gmail conectado: procesa cada correo nuevo al llegar (mira cada 2 min)
     if a.abrir:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()

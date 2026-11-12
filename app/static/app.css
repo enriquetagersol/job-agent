@@ -376,11 +376,5 @@ dialog h2 { margin-bottom: 4px; }
 .buscar-aplicadas { width: 100%; max-width: 360px; margin: 0 0 14px; padding: 8px 12px; border: 1px solid var(--borde); border-radius: 8px; background: var(--superficie); color: var(--texto); font: inherit; }
 .aplicada-pie { align-items: center; flex-wrap: wrap; }
 .aplicada-pie .cuando { color: var(--suave); font-size: 13px; margin-right: auto; }
-/* «Aplicadas»: todas las tarjetas del mismo alto; el texto largo se despliega con «Ver todo» */
-.lista-ofertas.aplicadas .sencillo { height: 300px; overflow: hidden; align-content: start; position: relative; }
-.lista-ofertas.aplicadas .sencillo.recortada::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(to bottom, transparent, var(--superficie)); pointer-events: none; }
-.lista-ofertas.aplicadas .sencillo.abierta { height: auto; }
-.lista-ofertas.aplicadas .sencillo.abierta::after { display: none; }
-.ver-todo { align-self: flex-start; margin-top: -6px; padding: 2px 0; border: 0; background: none; color: var(--acento); font: inherit; font-size: 13px; cursor: pointer; }
 .acciones-ficha { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
 .oferta > .acciones-ficha + .decision { margin-top: 0; }

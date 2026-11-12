@@ -438,7 +438,7 @@ function tarjetaOferta(o) {
   let pie;
   if (o.aplicada) {
     const c = o.aplicada;
-    pie = `${o.sencillo ? "" : accionesFicha(c)}<div class="decision aplicada-pie"><span class="etapa e-${c.estado}">${NOMBRE[c.estado]}</span>
+    pie = `${accionesFicha(c, !!o.sencillo)}<div class="decision aplicada-pie"><span class="etapa e-${c.estado}">${NOMBRE[c.estado]}</span>
       ${c.fecha_aplicacion ? `<span class="cuando">Aplicaste el ${fechaCorta(c.fecha_aplicacion)}</span>` : ""}
       ${c.cv_adaptado ? `<button data-cv="${c.id}">📄 CV que enviaste</button>` : ""}
       <button data-abrir="${c.id}">Ver candidatura</button></div>`;
@@ -470,16 +470,20 @@ function tarjetaOferta(o) {
 }
 // Puesto aplicado sin ficha: buscarla por puesto y empresa, o corregir el puesto / pegar la descripción
 function sinFichaAplicada(c) {
-  if (E.analizando === c.id) return `<div><b>Buscando la oferta…</b>La busco en la web por el puesto y la empresa y la analizo con tu perfil. Tarda 1-2 minutos.</div>`;
+  if (buscandoFicha(c.id)) return `<div><b>Buscando la oferta…</b>La busco en la web por el puesto y la empresa y la analizo con tu perfil. Tarda 1-2 minutos.</div>`;
   const texto = c.descripcion ? `<div><b>Tu descripción</b>${md(c.descripcion)}</div>`
     : c.ficha_no_encontrada ? `<div class="no"><b>No la encontré</b>Puede que la oferta ya esté cerrada o que el puesto no esté bien escrito. Corrígelo o pega su descripción.</div>`
     : `<div><b>Sin ficha todavía</b>Puedo buscar la oferta en la web por el puesto y la empresa.</div>`;
   return texto;
 }
-function accionesFicha(c) {
-  if (E.analizando === c.id) return "";
-  const buscar = c.ficha_no_encontrada && !c.descripcion ? "" : `<button class="primario" data-buscar-ficha="${c.id}">🔍 ${c.descripcion ? "Analizar" : "Buscar la oferta"}</button>`;
-  return `<div class="acciones-ficha">${buscar}<button data-editar-ficha="${c.id}">✏️ ${c.ficha_no_encontrada ? "Añadirla tú" : "Editar o pegar descripción"}</button></div>`;
+const buscandoFicha = (id) => E.analizando === id || (E.estado.buscando_fichas || []).includes(id);
+// Botones de todas las aplicadas: volver a buscar la oferta (p. ej. para reaplicar) y corregirla o pegar su texto
+function accionesFicha(c, conFicha) {
+  if (buscandoFicha(c.id)) return "";
+  const otraVez = conFicha || (c.ficha_no_encontrada && !c.descripcion);
+  const buscar = `<button class="${otraVez ? "" : "primario"}" data-buscar-ficha="${c.id}">🔍 ${otraVez ? "Volver a buscar la oferta" : c.descripcion ? "Analizar" : "Buscar la oferta"}</button>`;
+  const editar = conFicha ? "" : `<button data-editar-ficha="${c.id}">✏️ ${c.ficha_no_encontrada ? "Añadirla tú" : "Editar o pegar descripción"}</button>`;
+  return `<div class="acciones-ficha">${buscar}${editar}</div>`;
 }
 async function buscarFicha(id, cuerpo = {}) {
   E.analizando = id; pintarOfertas();
@@ -490,7 +494,13 @@ async function buscarFicha(id, cuerpo = {}) {
   E.analizando = null; await recargar();
 }
 
+let vigilaFichas = null;
+function vigilarFichas() {
+  if ((E.estado.buscando_fichas || []).length && !vigilaFichas) vigilaFichas = setTimeout(async () => { vigilaFichas = null; await recargar(); }, 8000);
+}
+
 function pintarOfertas() {
+  vigilarFichas();
   const res = resultados(), gua = guardados(), apl = aplicadas();
   $$("#filtro-ofertas button").forEach((b) => {
     b.classList.toggle("activa", b.dataset.f === E.filtroOf);
@@ -501,25 +511,13 @@ function pintarOfertas() {
   if (E.filtroOf === "aplicadas") {
     const q = busca.value.trim().toLowerCase();
     const lista = apl.filter((o) => !q || `${o.empresa} ${o.puesto}`.toLowerCase().includes(q));
-    $("#lista-ofertas").classList.add("aplicadas");
     $("#lista-ofertas").innerHTML = lista.length ? lista.map(tarjetaOferta).join("")
       : `<div class="vacio">${q ? "Ningún puesto coincide con la búsqueda." : "Aún no has aplicado a ningún puesto."}</div>`;
     $$("[data-cv]").forEach((b) => b.addEventListener("click", () => abrirCvPrevia(b.dataset.cv)));
     $$("[data-buscar-ficha]").forEach((b) => b.addEventListener("click", () => buscarFicha(b.dataset.buscarFicha)));
     $$("[data-editar-ficha]").forEach((b) => b.addEventListener("click", () => editarFicha(b.dataset.editarFicha)));
-    // Todas las tarjetas del mismo alto: el texto largo se recorta y se despliega con «Ver todo»
-    $$("#lista-ofertas .sencillo").forEach((s) => {
-      if (s.scrollHeight <= s.clientHeight + 4) return;
-      s.classList.add("recortada");
-      s.insertAdjacentHTML("afterend", '<button class="ver-todo">Ver todo ▾</button>');
-      s.nextElementSibling.addEventListener("click", (ev) => {
-        const abierta = s.classList.toggle("abierta");
-        ev.target.textContent = abierta ? "Ver menos ▴" : "Ver todo ▾";
-      });
-    });
     return;
   }
-  $("#lista-ofertas").classList.remove("aplicadas");
   // Las nuevas primero; dentro de cada grupo, por encaje
   const os = (E.filtroOf === "resultados" ? res : gua).sort((a, b) => (esNueva(b) - esNueva(a)) || ((b.encaje ?? -1) - (a.encaje ?? -1)));
   const vacio = E.filtroOf === "resultados"
