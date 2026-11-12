@@ -31,7 +31,9 @@
     <div class="segmentado" id="filtro-ofertas">
       <button data-f="resultados" class="activa">Resultados de búsqueda</button>
       <button data-f="guardados">Te interesa</button>
+      <button data-f="aplicadas">Aplicadas</button>
     </div>
+    <input type="search" id="buscar-aplicadas" class="buscar-aplicadas" placeholder="Buscar por empresa o puesto" hidden>
     <div class="lista-ofertas" id="lista-ofertas"></div>
   </section>
 
@@ -106,6 +108,21 @@
     <div class="botones">
       <button value="omitir">Omitir</button>
       <button value="ok" class="primario">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Analizar el puesto de una candidatura ya aplicada -->
+<dialog id="dlg-analizar">
+  <form method="dialog" class="form">
+    <h2>Analizar el puesto</h2>
+    <p class="sub" id="analizar-titulo"></p>
+    <p class="sub">Busco la oferta en la web y te hago su ficha: qué harías, por qué encaja y por qué no. Si ya está
+      cerrada, pega aquí su descripción (opcional).</p>
+    <textarea id="analizar-texto" rows="6" placeholder="Descripción de la oferta (opcional)"></textarea>
+    <div class="botones">
+      <button value="cancelar">Cancelar</button>
+      <button value="ok" class="primario">🔍 Analizar</button>
     </div>
   </form>
 </dialog>

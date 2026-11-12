@@ -373,3 +373,6 @@ dialog h2 { margin-bottom: 4px; }
 .puesto-emp:hover { color: var(--acento); }
 .borrar-cand { margin-top: 18px; align-self: flex-start; color: var(--mal); border-color: color-mix(in srgb, var(--mal) 40%, var(--borde)); background: var(--superficie); }
 .borrar-cand:hover { background: var(--mal-suave); border-color: var(--mal); }
+.buscar-aplicadas { width: 100%; max-width: 360px; margin: 0 0 14px; padding: 8px 12px; border: 1px solid var(--borde); border-radius: 8px; background: var(--superficie); color: var(--texto); font: inherit; }
+.aplicada-pie { align-items: center; flex-wrap: wrap; }
+.aplicada-pie .cuando { color: var(--suave); font-size: 13px; margin-right: auto; }

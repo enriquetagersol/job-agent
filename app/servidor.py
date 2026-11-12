@@ -164,6 +164,21 @@ class Manejador(BaseHTTPRequestHandler):
             return self._escritura(subir)
         if p == ["api", "busqueda"]:
             return self._escritura(lambda: (busqueda_ia.lanzar(), {"ok": True})[1])
+        if len(p) == 4 and p[:2] == ["api", "candidaturas"] and p[3] == "analizar":
+            def analizar():
+                # Ficha del puesto de una candidatura (qué harías, por qué encaja…): la busca en la web o usa el texto pegado
+                import correo_ia
+                c = next((x for x in datos.candidaturas() if x["id"] == p[2]), None)
+                if c is None:
+                    raise KeyError(p[2])
+                texto = (self._cuerpo().get("texto") or "").strip()
+                o = correo_ia.investigar_oferta(url=c.get("url") or "", empresa=c["empresa"], puesto=c["puesto"],
+                                                texto=texto or c.get("descripcion") or "")
+                datos.enlazar_oferta(c["id"], o["id"])
+                if len(texto) >= 300 and not c.get("descripcion"):
+                    datos.actualizar_candidatura(c["id"], tocar_fecha=False, descripcion=texto)
+                return {"ok": True, "oferta": o["id"]}
+            return self._escritura(analizar)
         if len(p) == 4 and p[:2] == ["api", "candidaturas"] and p[3] == "cv":
             def lanzar_cv():
                 ok, motivo = cv_ia.disponibilidad()

@@ -96,6 +96,17 @@ const guardados = () => {
   return [...ofs, ...sueltas];
 };
 
+// «Aplicadas» = registro de los puestos a los que has aplicado (sigan abiertos o no), con su ficha si la tienen
+const APLICADA = ["enviada", "en_proceso", "oferta", "rechazada"];
+const aplicadas = () => E.estado.candidaturas
+  .filter((c) => APLICADA.includes(c.estado) || c.fecha_aplicacion)
+  .map((c) => {
+    const o = E.estado.ofertas.find((x) => x.id === c.oferta_id) || {};
+    return { ...o, id: "apl-" + c.id, aplicada: c, empresa: c.empresa, puesto: c.puesto, url: c.url || o.url || "" };
+  })
+  .sort((a, b) => (b.aplicada.fecha_aplicacion || b.aplicada.fecha_actualizacion || "")
+    .localeCompare(a.aplicada.fecha_aplicacion || a.aplicada.fecha_actualizacion || ""));
+
 function pintar() {
   const n = resultados().length;
   const ins = $("#ins-ofertas"); ins.textContent = n; ins.hidden = !n;
@@ -418,12 +429,24 @@ $("#dlg-pref").addEventListener("close", async () => {
 function tarjetaOferta(o) {
   const s = o.sencillo || {};
   const nivel = o.encaje >= 70 ? "alto" : o.encaje >= 55 ? "medio" : "bajo";
-  const secciones = o.soloCand && !o.sencillo
+  const sinFicha = (o.soloCand || o.aplicada) && !o.sencillo;
+  const secciones = o.aplicada && sinFicha
+    ? (E.analizando === o.aplicada.id
+        ? `<div><b>Analizando el puesto…</b>Busco la oferta y la analizo con tu perfil. Tarda 1-2 minutos.</div>`
+        : `<div><b>Sin ficha todavía</b>${md(o.aplicada.detalle || "No guardé qué era este puesto.")}</div>
+           <div><button class="secundario" data-analizar="${o.aplicada.id}">🔍 Analizar puesto</button></div>`)
+    : o.soloCand && !o.sencillo
     ? `<div><b>Tus notas</b>${md(o.soloCand.detalle || o.soloCand.descripcion || "Sin analizar todavía: pídele a Job Agent por Slack que investigue la oferta si quieres su ficha.")}</div>`
     : [["que_harias", "Qué harías", ""], ["por_que_encaja", "Por qué encaja", "si"], ["por_que_no_encaja", "Por qué no encaja", "no"]]
       .map(([k, t, cls]) => `<div class="${cls}"><b>${t}</b>${md(s[k] || (k === "por_que_no_encaja" ? s.gaps : "") || "—")}</div>`).join("");
   let pie;
-  if (o.soloCand) {
+  if (o.aplicada) {
+    const c = o.aplicada;
+    pie = `<div class="decision aplicada-pie"><span class="etapa e-${c.estado}">${NOMBRE[c.estado]}</span>
+      ${c.fecha_aplicacion ? `<span class="cuando">Aplicaste el ${fechaCorta(c.fecha_aplicacion)}</span>` : ""}
+      ${c.cv_adaptado ? `<button data-cv="${c.id}">📄 CV que enviaste</button>` : ""}
+      <button data-abrir="${c.id}">Ver candidatura</button></div>`;
+  } else if (o.soloCand) {
     // Candidatura «Por aplicar» sin oferta analizada (p. ej. creada desde Slack): mismos botones
     const c = o.soloCand, creando = (c.cv_trabajo || {}).estado === "generando";
     pie = `<div class="decision">
@@ -450,11 +473,22 @@ function tarjetaOferta(o) {
     <div class="sencillo">${o.empresa_desc ? `<div class="empresa-desc"><b>La empresa</b>${md(o.empresa_desc)}</div>` : ""}${secciones}</div>${pie}</article>`;
 }
 function pintarOfertas() {
-  const res = resultados(), gua = guardados();
+  const res = resultados(), gua = guardados(), apl = aplicadas();
   $$("#filtro-ofertas button").forEach((b) => {
     b.classList.toggle("activa", b.dataset.f === E.filtroOf);
-    b.textContent = b.dataset.f === "resultados" ? `Resultados de búsqueda (${res.length})` : `Te interesa (${gua.length})`;
+    b.textContent = b.dataset.f === "resultados" ? `Resultados de búsqueda (${res.length})`
+      : b.dataset.f === "aplicadas" ? `Aplicadas (${apl.length})` : `Te interesa (${gua.length})`;
   });
+  const busca = $("#buscar-aplicadas"); busca.hidden = E.filtroOf !== "aplicadas";
+  if (E.filtroOf === "aplicadas") {
+    const q = busca.value.trim().toLowerCase();
+    const lista = apl.filter((o) => !q || `${o.empresa} ${o.puesto}`.toLowerCase().includes(q));
+    $("#lista-ofertas").innerHTML = lista.length ? lista.map(tarjetaOferta).join("")
+      : `<div class="vacio">${q ? "Ningún puesto coincide con la búsqueda." : "Aún no has aplicado a ningún puesto."}</div>`;
+    $$("[data-cv]").forEach((b) => b.addEventListener("click", () => abrirCvPrevia(b.dataset.cv)));
+    $$("[data-analizar]").forEach((b) => b.addEventListener("click", () => pedirAnalisis(b.dataset.analizar)));
+    return;
+  }
   // Las nuevas primero; dentro de cada grupo, por encaje
   const os = (E.filtroOf === "resultados" ? res : gua).sort((a, b) => (esNueva(b) - esNueva(a)) || ((b.encaje ?? -1) - (a.encaje ?? -1)));
   const vacio = E.filtroOf === "resultados"
@@ -476,6 +510,25 @@ function pintarOfertas() {
   }));
 }
 function filtro(f) { E.filtroOf = f; pintarOfertas(); }
+$("#buscar-aplicadas").addEventListener("input", pintarOfertas);
+
+// Analizar el puesto de una candidatura ya aplicada (solo al pulsar: busca la oferta en la web o usa el texto pegado)
+function pedirAnalisis(id) {
+  const c = cand(id); E.porAnalizar = id;
+  $("#analizar-titulo").textContent = `${c.puesto} · ${c.empresa}`;
+  $("#analizar-texto").value = c.descripcion || "";
+  $("#dlg-analizar").returnValue = ""; $("#dlg-analizar").showModal();
+}
+$("#dlg-analizar").addEventListener("close", async () => {
+  const id = E.porAnalizar; E.porAnalizar = null;
+  if (!id || $("#dlg-analizar").returnValue !== "ok") return;
+  E.analizando = id; pintarOfertas();
+  try {
+    await api("POST", `/api/candidaturas/${id}/analizar`, { texto: $("#analizar-texto").value });
+    aviso(`🔍 Ficha de ${cand(id).empresa} lista`);
+  } catch (e) { aviso(e.message); }
+  E.analizando = null; await recargar();
+});
 $$("#filtro-ofertas button").forEach((b) => b.addEventListener("click", () => filtro(b.dataset.f)));
 
 // ¿Por qué? (opcional, al pulsar el botón)

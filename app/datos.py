@@ -302,6 +302,21 @@ def decidir_oferta(oid, valor, motivo=""):
     return o
 
 
+def enlazar_oferta(cid, oid):
+    """Une una candidatura con la ficha de su oferta (p. ej. analizada después de aplicar). Si la oferta no tenía
+    decisión, queda como «interesa» ya aprendida: no vuelve a resultados ni cuenta como una decisión nueva."""
+    actualizar_candidatura(cid, tocar_fecha=False, oferta_id=oid)
+    with _lock:
+        doc = _leer(F_OFER, {"ofertas": []})
+        for o in doc["ofertas"]:
+            if o["id"] == oid:
+                o["candidatura_id"] = cid
+                o.setdefault("decision", None)
+                if not o["decision"]:
+                    o["decision"] = {"valor": "interesa", "motivo": "Ya aplicada", "fecha": hoy(), "aprendida": True}
+        _escribir(F_OFER, doc)
+
+
 def marcar_decisiones_aprendidas(ids):
     with _lock:
         doc = _leer(F_OFER, {"ofertas": []})
