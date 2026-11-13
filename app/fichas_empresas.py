@@ -90,7 +90,7 @@ def _investigar(cliente, empresa, cands):
 
 def completar():
     """Busca la ficha de las empresas activas que aún no la tienen. Devuelve cuántas ha añadido."""
-    if not cv_ia.disponibilidad()[0] or not _lock.acquire(blocking=False):
+    if not datos.ajuste("fichas_empresas") or not cv_ia.disponibilidad()[0] or not _lock.acquire(blocking=False):
         return 0
     try:
         hechas = fichas()

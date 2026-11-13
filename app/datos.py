@@ -25,6 +25,20 @@ F_CAND = os.path.join(DIR_DATOS, "candidaturas.json")
 F_OFER = os.path.join(DIR_DATOS, "ofertas.json")
 F_PREF = os.path.join(RAIZ, "perfil", "preferencias.json")
 F_BUSQ = os.path.join(DIR_DATOS, "busqueda.json")
+F_AJUSTES = os.path.join(DIR_DATOS, "ajustes.json")
+# Ajustes de consumo (se cambian en la app, botón «Ajustes»): clave -> (por defecto, valores permitidos)
+AJUSTES = {
+    "correo_activo": (True, (True, False)),        # leer el correo nuevo al llegar
+    "alertas_activas": (True, (True, False)),      # investigar los puestos de las alertas de empleo (LinkedIn…)
+    "alertas_cada_dias": (1, (1, 3, 7, 0)),        # cada cuántos días se investigan (0 = solo cuando lo pida)
+    "alertas_max": (10, (5, 10, 20)),              # máximo de puestos de alertas investigados cada vez
+    "busqueda_max": (15, (5, 10, 15, 25)),         # ofertas analizadas a fondo en cada «Buscar ofertas»
+    "analisis": ("completo", ("completo", "ahorro")),  # ahorro = Haiku en vez de Sonnet para analizar ofertas
+    "fichas_empresas": (True, (True, False)),      # fichas automáticas de las empresas (pestaña Empresas)
+    "fichas_puestos": (True, (True, False)),       # buscar sola la ficha de los puestos aplicados
+    "aprendizaje": (True, (True, False)),          # aprender de cada 👍/👎 al momento
+    "sugerencias": (True, (True, False)),          # sugerir el próximo paso con Claude (si no, reglas sencillas)
+}
 CAMPOS_PREF = {"puestos": list, "ubicaciones": list, "mudarme_a": list, "modalidad": str,
                "salario_minimo": int, "salario_objetivo": int, "sectores": list, "valoro": list,
                "evitar": list, "descarto": list, "frases": dict}
@@ -363,6 +377,32 @@ def guardar_preferencias(nuevas):
 
 
 # ---------- estado de la búsqueda lanzada desde la app ----------
+
+def ajustes():
+    guardados = _leer(F_AJUSTES, {})
+    return {k: guardados[k] if guardados.get(k) in ok and type(guardados.get(k)) is type(d) else d
+            for k, (d, ok) in AJUSTES.items()}
+
+
+def ajuste(k):
+    return ajustes()[k]
+
+
+def guardar_ajustes(nuevos):
+    with _lock:
+        a = ajustes()
+        for k, v in (nuevos or {}).items():
+            if k not in AJUSTES:
+                continue
+            d, ok = AJUSTES[k]
+            if isinstance(d, int) and not isinstance(d, bool) and isinstance(v, str) and v.lstrip("-").isdigit():
+                v = int(v)
+            if type(v) is not type(d) or v not in ok:
+                raise ValueError(f"Valor no válido para {k}")
+            a[k] = v
+        _escribir(F_AJUSTES, a)
+    return a
+
 
 def estado_busqueda():
     return _leer(F_BUSQ, {"estado": "inactivo"})

@@ -14,6 +14,7 @@
     <button role="tab" data-vista="ofertas">Ofertas <span class="insignia" id="ins-ofertas" hidden></span></button>
     <button role="tab" data-vista="empresas">Empresas</button>
   </nav>
+  <button class="btn-ajustes" id="btn-ajustes" title="Qué hace Job Agent por su cuenta y cuánto gasta">🎚️ Ajustes</button>
 </header>
 <div class="banda" id="banda" hidden></div>
 
@@ -165,13 +166,67 @@
   <form method="dialog" class="form">
     <h2>Buscar ofertas nuevas</h2>
     <p>Buscaré en las webs de empleo de unas 145 empresas tecnológicas los puestos de tus preferencias, y
-      Filtra por el título las que no encajan y Claude analiza a fondo hasta <strong>15 ofertas nuevas</strong> con tu perfil. Las que encajen aparecerán en
+      Filtra por el título las que no encajan y Claude analiza a fondo hasta <strong><span id="buscar-max">15</span> ofertas nuevas</strong> con tu perfil. Las que encajen aparecerán en
       <em>Ofertas → Resultados de búsqueda</em>.</p>
     <p class="sub">Tarda unos minutos y puedes seguir usando la app mientras tanto.</p>
     <p class="err" id="buscar-aviso" hidden></p>
     <div class="botones">
       <button value="cancelar">Cancelar</button>
       <button value="ok" class="primario" id="buscar-ok">Buscar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Ajustes de consumo -->
+<dialog id="dlg-ajustes" class="ancho">
+  <form method="dialog" class="form" id="form-ajustes">
+    <h2>Ajustes</h2>
+    <p class="sub">Lo que Job Agent hace por su cuenta con Claude. Apagar o espaciar algo hace que gaste menos. Lo que
+      pidas tú (un botón, Slack) funciona siempre.</p>
+
+    <fieldset class="grupo-ajustes"><legend>Correo</legend>
+      <label class="interruptor"><input type="checkbox" name="correo_activo">
+        <span><b>Leer mi correo al llegar</b>Etiqueta los de empleo y actualiza tus candidaturas. Si lo apagas y luego
+          lo enciendes, se pone al día con lo que llegó mientras tanto.</span></label>
+      <label class="interruptor"><input type="checkbox" name="alertas_activas">
+        <span><b>Investigar las alertas de empleo</b>Las de LinkedIn, Indeed…: busco cada puesto en la web y lo analizo
+          con tu perfil. Es lo que más gasta del correo. Apagado, las alertas se etiquetan pero no se investigan.</span></label>
+      <div class="fila2" id="ajustes-alertas">
+        <label>Cada cuánto las investigo<select name="alertas_cada_dias">
+          <option value="1">Una vez al día</option><option value="3">Cada 3 días</option>
+          <option value="7">Una vez a la semana</option><option value="0">Solo cuando lo pida</option></select></label>
+        <label>Puestos cada vez, como mucho<select name="alertas_max">
+          <option value="5">5</option><option value="10">10</option><option value="20">20</option></select></label>
+      </div>
+      <div class="cola-alertas" id="ajustes-cola"></div>
+    </fieldset>
+
+    <fieldset class="grupo-ajustes"><legend>Ofertas</legend>
+      <div class="fila2">
+        <label>Ofertas que analizo en cada búsqueda<select name="busqueda_max">
+          <option value="5">5</option><option value="10">10</option><option value="15">15</option><option value="25">25</option></select></label>
+        <label>Análisis de cada oferta<select name="analisis">
+          <option value="completo">Completo (recomendado)</option><option value="ahorro">Ahorro: mucho más barato</option></select></label>
+      </div>
+      <p class="sub">El modo ahorro usa un modelo más pequeño: las fichas salen algo menos finas. Vale para las
+        búsquedas, las alertas del correo y las ofertas que me pases. Los CVs no cambian.</p>
+    </fieldset>
+
+    <fieldset class="grupo-ajustes"><legend>Tareas automáticas</legend>
+      <label class="interruptor"><input type="checkbox" name="fichas_empresas">
+        <span><b>Fichas de las empresas</b>Qué hace cada empresa de tus candidaturas (pestaña Empresas).</span></label>
+      <label class="interruptor"><input type="checkbox" name="fichas_puestos">
+        <span><b>Buscar la ficha de los puestos aplicados</b>Apagado, puedes buscarla tú con su botón en «Aplicadas».</span></label>
+      <label class="interruptor"><input type="checkbox" name="aprendizaje">
+        <span><b>Aprender de tus 👍/👎 al momento</b>Apagado, tus decisiones se guardan y aprendo de todas juntas cuando
+          lo vuelvas a encender.</span></label>
+      <label class="interruptor"><input type="checkbox" name="sugerencias">
+        <span><b>Sugerir el próximo paso con IA</b>Apagado, sugiero pasos sencillos por reglas (sin gasto).</span></label>
+    </fieldset>
+
+    <div class="botones">
+      <button value="cancelar" formnovalidate>Cancelar</button>
+      <button value="ok" class="primario">Guardar ajustes</button>
     </div>
   </form>
 </dialog>

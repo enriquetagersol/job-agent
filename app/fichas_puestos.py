@@ -60,7 +60,7 @@ def pendientes():
 
 def completar():
     """Busca la ficha de las aplicadas que no la tienen (una vez cada una). Devuelve cuántas ha encontrado."""
-    if not cv_ia.disponibilidad()[0] or not _lock.acquire(blocking=False):
+    if not datos.ajuste("fichas_puestos") or not cv_ia.disponibilidad()[0] or not _lock.acquire(blocking=False):
         return 0
     try:
         def una(c):
@@ -75,7 +75,7 @@ def completar():
 
 
 def completar_en_segundo_plano():
-    if pendientes():
+    if datos.ajuste("fichas_puestos") and pendientes():
         threading.Thread(target=completar, daemon=True).start()
 
 

@@ -122,8 +122,8 @@ def aprender():
 
 def programar():
     """Aprende un minuto después de la última decisión (así junta varias seguidas en una sola llamada)."""
-    if _programado.is_set():
-        return
+    if _programado.is_set() or not datos.ajuste("aprendizaje"):
+        return  # apagado en Ajustes: lo aprende /revisar o la próxima decisión con el ajuste encendido
     _programado.set()
 
     def tarea():

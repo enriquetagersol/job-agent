@@ -30,8 +30,7 @@ import busqueda_ia  # noqa: E402
 
 F_CORREO = gmail_lector.F_CORREO
 MAX_CORREOS = 150
-LOTE = 10              # los puestos de las alertas se investigan de 10 en 10 (cada uno cuesta una búsqueda web)
-MAX_ESPERA_DIAS = 3    # …o antes si el más antiguo lleva 3 días esperando, para que no caduquen
+CADUCA_DIAS = 14       # los puestos de alertas que llevan más de 2 semanas esperando se olvidan (ya suelen estar cerrados)
 SENIOR = re.compile(r"\b(senior|sr\.?|staff|principal|lead|head of|director|vp)\b", re.I)
 BLOQUEADOS = ["linkedin.com"]  # los puestos de las alertas se investigan fuera de LinkedIn
 _en_marcha = threading.Lock()
@@ -182,16 +181,16 @@ def _esquema_investigacion():
 def _investigar(cliente, sistema, p, url=""):
     """Busca la oferta en la web (sin LinkedIn) y la analiza. Devuelve el análisis o None.
     Con `url` (de otra web que no sea LinkedIn) empieza leyendo esa página."""
-    texto = INVESTIGAR.format(**p)
+    texto, modelo = INVESTIGAR.format(**p), modelos.para("investigar_oferta")
     if url:
         texto += f"\n\nLa persona la vio aquí: {url} — empieza leyendo esa página con web_fetch."
     mensajes = [{"role": "user", "content": texto}]
     for _ in range(5):  # la búsqueda web puede pausar el turno; se continúa
         r = cliente.beta.messages.create(
-            model=modelos.para("investigar_oferta"), max_tokens=16000, system=sistema,
+            model=modelo, max_tokens=16000, system=sistema,
             betas=["server-side-fallback-2026-07-01"], fallbacks="default",
-            tools=[modelos.busqueda_web(modelos.para("investigar_oferta"), 4, blocked_domains=BLOQUEADOS),
-                   modelos.lectura_web(modelos.para("investigar_oferta"), 3, blocked_domains=BLOQUEADOS)],
+            tools=[modelos.busqueda_web(modelo, 4, blocked_domains=BLOQUEADOS),
+                   modelos.lectura_web(modelo, 3, blocked_domains=BLOQUEADOS)],
             output_config={"effort": "medium", "format": {"type": "json_schema", "schema": _esquema_investigacion()}},
             messages=mensajes)
         if r.stop_reason != "pause_turn":
@@ -314,29 +313,70 @@ def _guardar_cola(cola):
         datos._escribir(F_CORREO, e)
 
 
+def _toca_investigar(dias):
+    """¿Ha pasado el plazo elegido en Ajustes desde la última vez que se investigaron las alertas?"""
+    if not dias:
+        return False  # «solo cuando lo pida»
+    ultima = datos._leer(F_CORREO, {}).get("ultima_investigacion_alertas")
+    if not ultima:
+        return True
+    return _dt.datetime.now() - _dt.datetime.fromisoformat(ultima) >= _dt.timedelta(days=dias, hours=-2)
+
+
 def _procesar_alertas(cliente, puestos, simular, forzar=False):
-    """Para no gastar de más, los puestos de las alertas se ACUMULAN y se investigan de LOTE en LOTE (o si el más
-    antiguo lleva MAX_ESPERA_DIAS esperando, para que no caduquen). Devuelve (recomendadas, info)."""
-    cola = _cola()
+    """Para no gastar de más, los puestos de las alertas se ACUMULAN y se investigan como mucho cada
+    `alertas_cada_dias` (Ajustes), hasta `alertas_max` cada vez (primero los más recientes). Devuelve (recomendadas, info)."""
+    if not datos.ajuste("alertas_activas") and not forzar:
+        return [], {"puestos_en_alertas": len(puestos), "desactivado": True, "en_cola": len(_cola()),
+                    "investigados": 0, "no_encontrados": 0}
+    ahora = _dt.datetime.now()
+    cola = [p for p in _cola() if ahora - _dt.datetime.fromisoformat(p["desde"]) < _dt.timedelta(days=CADUCA_DIAS)]
     por_reglas = []
     nuevos = _filtrar(puestos, cola, por_reglas)              # filtro gratis por reglas
     nuevos, cribados = _criba(cliente, nuevos) if (nuevos and cliente) else (nuevos, [])  # criba barata por título
-    ahora = _dt.datetime.now().isoformat(timespec="seconds")
-    cola = cola + [{**p, "desde": ahora} for p in nuevos]
-    viejo = cola and (_dt.datetime.now() - _dt.datetime.fromisoformat(cola[0]["desde"])).days >= MAX_ESPERA_DIAS
+    cola = cola + [{**p, "desde": ahora.isoformat(timespec="seconds")} for p in nuevos]
     info = {"puestos_en_alertas": len(puestos), "descartados_por_reglas": por_reglas,
             "nuevos_en_cola": len(nuevos), "descartados_por_titulo": cribados, "en_cola": len(cola),
             "investigados": 0, "no_encontrados": 0}
     if simular:
         return [], info
-    if not (forzar and cola) and len(cola) < LOTE and not viejo:
+    if not cola or not (forzar or _toca_investigar(datos.ajuste("alertas_cada_dias"))):
         _guardar_cola(cola)
         return [], info
-    lote, resto = cola[:LOTE], cola[LOTE:]
+    cola.sort(key=lambda p: p["desde"], reverse=True)  # primero los más recientes: los viejos pueden estar cerrados
+    maximo = datos.ajuste("alertas_max")
+    lote, resto = cola[:maximo], cola[maximo:]
     _guardar_cola(resto)  # si algo falla a medias, no se reintenta en bucle
+    with datos._lock:
+        e = datos._leer(F_CORREO, {})
+        e["ultima_investigacion_alertas"] = ahora.isoformat(timespec="seconds")
+        datos._escribir(F_CORREO, e)
     recomendadas, perdidos = _investigar_lote(cliente, lote)
     info.update(en_cola=len(resto), investigados=len(lote), no_encontrados=perdidos)
     return recomendadas, info
+
+
+def en_cola():
+    return len(_cola())
+
+
+def investigar_cola_en_segundo_plano():
+    """Botón «Investigar ahora» de Ajustes: investiga ya los puestos acumulados (hasta el máximo elegido)."""
+    n = min(len(_cola()), datos.ajuste("alertas_max"))
+    if not n:
+        raise ValueError("No hay puestos de alertas esperando.")
+    if _en_marcha.locked():
+        raise ValueError("Ahora mismo estoy revisando el correo; pruébalo en un par de minutos.")
+
+    def tarea():
+        try:
+            recomendadas, _ = analizar_pendientes()
+            if recomendadas:
+                _avisar({"notificaciones": [], "dudas": [], "ofertas": recomendadas})
+        except Exception as e:  # noqa: BLE001
+            print(f"Alertas: la investigación falló ({type(e).__name__}: {str(e)[:300]})", flush=True)
+    threading.Thread(target=tarea, daemon=True).start()
+    return n
 
 
 def investigar_oferta(url="", empresa="", puesto="", texto="", ubicacion=""):
@@ -478,7 +518,7 @@ def revisar(notificar=True, simular=False, desde=None, ids=None):
                 empleos += [p for p in c_ia["puestos"] if p["titulo"].strip() and p["empresa"].strip()]
             if c_ia["importante"] and c_ia["aviso"].strip():
                 informe["avisos"].append(c_ia["aviso"].strip())
-        # primero se investigan (de LOTE en LOTE, para no gastar de más) y luego se avisa solo de las que encajan
+        # primero se investigan (acumuladas, según Ajustes, para no gastar de más) y luego se avisa solo de las que encajan
         informe["ofertas"], informe["alertas"] = _procesar_alertas(cliente, empleos, simular)
         if not simular:
             with datos._lock:
@@ -568,7 +608,7 @@ def vigilar(intervalo=120, reintento=30, paso=10):
             if time.time() >= proxima:
                 espera = intervalo
                 try:
-                    if gmail_lector.disponibilidad()[0] and cv_ia.disponibilidad()[0]:
+                    if datos.ajuste("correo_activo") and gmail_lector.disponibilidad()[0] and cv_ia.disponibilidad()[0]:
                         _comprobar()
                 except ValueError:
                     espera = reintento  # p. ej. ya hay una revisión en marcha

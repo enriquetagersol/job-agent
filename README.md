@@ -174,7 +174,7 @@ app se pone al día con lo que llegó mientras estaba cerrada. También puedes p
   fecha del correo (también los que envías tú, como un CV a alguien de la empresa).
 - De las **alertas de empleo** (LinkedIn, Indeed…) saca cada puesto, descarta gratis lo senior, de otras zonas o ya
   visto, y hace una **criba barata por título** con un modelo pequeño (≈0,0005 $ por puesto) para quedarse solo con los
-  que probablemente te encajan. Para no gastar de más, los **acumula y los investiga de 10 en 10** (o antes si alguno lleva 3 días esperando; cada uno cuesta unos 0,10-0,25 $). Cada puesto
+  que probablemente te encajan. Para no gastar de más, los **acumula y los investiga una vez al día, como mucho 10** (cada uno cuesta unos 0,10-0,25 $; los que llevan más de 2 semanas esperando se olvidan). La frecuencia y el máximo se cambian en **🎚️ Ajustes**. Cada puesto
   lo **investiga con búsquedas web**
   (la web de empleo de la empresa o su ATS; LinkedIn queda bloqueado), lo analiza como una búsqueda y añade
   a *Ofertas* (marcados como «Nueva») los que encajan.
@@ -206,9 +206,19 @@ El historial de las conversaciones se guarda en `datos/chat.json` (últimos mens
 
 Solo cuesta la API de Claude, y cada tarea usa el modelo justo (`app/modelos.py`): **Haiku** (muy barato) para
 clasificar correos, criba por título, próximos pasos, preferencias, aprendizaje, fichas de empresa y el chat de Slack;
-**Sonnet** para analizar ofertas, CVs y tu perfil. Las búsquedas filtran por título antes de analizar a fondo (máx. 15
-ofertas). Orientativo: un correo ≈ 0,0005 $, un mensaje de Slack ≈ 0,002 $, una oferta analizada ≈ 0,03-0,05 $, un CV
+**Sonnet** para analizar ofertas, CVs y tu perfil. Las búsquedas filtran por título antes de analizar a fondo (15
+ofertas como mucho, se cambia en Ajustes). Orientativo: un correo ≈ 0,0005 $, un mensaje de Slack ≈ 0,002 $, una oferta analizada ≈ 0,03-0,05 $, un CV
 optimizado ≈ 0,10-0,15 $. Pon un límite mensual en platform.claude.com → Limits.
+
+Para gastar menos, el botón **🎚️ Ajustes** de la app (arriba a la derecha) permite:
+- dejar de leer el correo, o seguir leyéndolo pero sin investigar las alertas de empleo;
+- elegir cada cuánto se investigan las alertas (cada día, cada 3 días, cada semana o solo cuando lo pidas) y cuántos
+  puestos como mucho, con un botón «Investigar ahora» para los que esperan;
+- cuántas ofertas analiza cada búsqueda (5-25) y un **modo ahorro** que analiza las ofertas con Haiku en vez de Sonnet;
+- apagar las tareas automáticas: fichas de empresas, fichas de los puestos aplicados, aprendizaje tras cada 👍/👎 y
+  próximos pasos con IA (sin IA usa reglas sencillas).
+
+Lo que pides tú con un botón o por Slack funciona siempre. Se guarda en `datos/ajustes.json`.
 
 ## Cómo puntúa
 

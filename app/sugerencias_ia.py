@@ -77,8 +77,8 @@ def _claude(cliente, c):
 
 
 def _cliente():
-    if not cv_ia.disponibilidad()[0]:
-        return None
+    if not datos.ajuste("sugerencias") or not cv_ia.disponibilidad()[0]:
+        return None  # sin Claude: sugerencia sencilla por reglas
     import anthropic
     return anthropic.Anthropic(api_key=cv_ia._api_key(), max_retries=2)
 

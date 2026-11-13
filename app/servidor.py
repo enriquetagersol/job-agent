@@ -11,6 +11,8 @@ API
   POST   /api/ofertas/<id>/decision       {valor, motivo?}
   POST   /api/candidaturas/<id>/cv        genera un CV adaptado con la API de Claude (en segundo plano)
   PUT    /api/preferencias                guarda las preferencias editables
+  PUT    /api/ajustes                     ajustes de consumo (correo, alertas, búsqueda, tareas automáticas)
+  POST   /api/alertas/investigar          investiga ya los puestos de alertas acumulados (en segundo plano)
   POST   /api/preferencias/interpretar    {campo, texto} -> categorías fijas (lenguaje natural)
   POST   /api/cv                          {nombre, datos_b64}: sube el CV y genera perfil + CV maestro
   POST   /api/busqueda                    lanza una búsqueda de ofertas con la API de Claude (en segundo plano)
@@ -33,6 +35,7 @@ import sugerencias_ia  # noqa: E402
 import aprendizaje_ia  # noqa: E402
 import fichas_empresas  # noqa: E402
 import fichas_puestos  # noqa: E402
+import correo_ia  # noqa: E402
 
 ESTATICOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 ARCHIVOS_PERMITIDOS = [os.path.join(datos.RAIZ, "cv"), os.path.join(datos.RAIZ, "resultados")]
@@ -101,7 +104,8 @@ class Manejador(BaseHTTPRequestHandler):
             return self._json(200, {**datos.estado_completo(), "ia": {"disponible": ok, "motivo": motivo},
                                     "perfil": perfil_ia.estado(), "aviso_correo": correo.get("ofertas_correo", {}),
                                     "cv_general": cv_ia.estado_general(), "empresas": fichas_empresas.para_la_app(),
-                                    "buscando_fichas": sorted(fichas_puestos.buscando)})
+                                    "buscando_fichas": sorted(fichas_puestos.buscando),
+                                    "ajustes": datos.ajustes(), "alertas_en_cola": correo_ia.en_cola()})
         if ruta.startswith("/archivo/"):
             destino = os.path.realpath(os.path.join(datos.RAIZ, unquote(ruta[len("/archivo/"):])))
             if not any(destino.startswith(os.path.realpath(p) + os.sep) for p in ARCHIVOS_PERMITIDOS):
@@ -153,6 +157,8 @@ class Manejador(BaseHTTPRequestHandler):
                 maestro_ia.aplicar(self._cuerpo().get("id", ""))
                 return {"ok": True}
             return self._escritura(aplicar)
+        if p == ["api", "alertas", "investigar"]:
+            return self._escritura(lambda: {"ok": True, "n": correo_ia.investigar_cola_en_segundo_plano()})
         if p == ["api", "preferencias", "interpretar"]:
             def interpretar():
                 b = self._cuerpo()
@@ -221,6 +227,14 @@ class Manejador(BaseHTTPRequestHandler):
     def do_PUT(self):
         if self._partes() == ["api", "preferencias"]:
             return self._escritura(lambda: datos.guardar_preferencias(self._cuerpo()))
+        if self._partes() == ["api", "ajustes"]:
+            def guardar():
+                a = datos.guardar_ajustes(self._cuerpo())
+                fichas_empresas.completar_en_segundo_plano()  # si se acaban de encender, se ponen al día
+                fichas_puestos.completar_en_segundo_plano()
+                aprendizaje_ia.programar()
+                return a
+            return self._escritura(guardar)
         return self._json(404, {"error": "no encontrado"})
 
     def do_DELETE(self):

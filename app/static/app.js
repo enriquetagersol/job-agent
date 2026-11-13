@@ -164,6 +164,7 @@ function abrirBuscar() {
   const ia = E.estado.ia || {};
   $("#buscar-aviso").hidden = ia.disponible; $("#buscar-aviso").textContent = ia.motivo || "";
   $("#buscar-ok").disabled = !ia.disponible;
+  $("#buscar-max").textContent = (E.estado.ajustes || {}).busqueda_max || 15;
   $("#dlg-buscar").returnValue = ""; $("#dlg-buscar").showModal();
 }
 $("#btn-buscar").addEventListener("click", abrirBuscar);
@@ -423,6 +424,45 @@ $("#dlg-pref").addEventListener("close", async () => {
     await api("PUT", "/api/preferencias", { ...prefEdit, frases: prefFrases, modalidad: f.modalidad.value, salario_minimo: f.salario_minimo.value, salario_objetivo: f.salario_objetivo.value });
     aviso("Preferencias guardadas ✓"); recargar();
   } catch (e) { aviso("Error: " + e.message); }
+});
+
+// ---------- AJUSTES de consumo ----------
+const AJ_SI_NO = ["correo_activo", "alertas_activas", "fichas_empresas", "fichas_puestos", "aprendizaje", "sugerencias"];
+const AJ_LISTAS = ["alertas_cada_dias", "alertas_max", "busqueda_max", "analisis"];
+function pintarColaAlertas() {
+  const n = E.estado.alertas_en_cola || 0, el = $("#ajustes-cola");
+  el.innerHTML = n ? `<span>${plural(n, "puesto de alertas esperando", "puestos de alertas esperando")}</span>
+      <button type="button" class="peq" id="btn-investigar-cola">🔍 Investigar ahora</button>`
+    : `<span>No hay puestos de alertas esperando.</span>`;
+  const b = $("#btn-investigar-cola");
+  if (b) b.addEventListener("click", async () => {
+    b.disabled = true;
+    try {
+      const r = await api("POST", "/api/alertas/investigar");
+      aviso(`🔍 Investigando ${plural(r.n, "puesto", "puestos")}: las que encajen aparecerán en Ofertas en unos minutos`);
+    } catch (e) { aviso(e.message); b.disabled = false; }
+  });
+}
+function bloquearAlertas() {
+  const f = $("#form-ajustes"), off = !f.alertas_activas.checked;
+  $$("#ajustes-alertas select").forEach((s) => (s.disabled = off));
+  $("#ajustes-alertas").classList.toggle("apagado", off);
+}
+$("#btn-ajustes").addEventListener("click", () => {
+  const a = E.estado.ajustes || {}, f = $("#form-ajustes");
+  AJ_SI_NO.forEach((k) => (f[k].checked = !!a[k]));
+  AJ_LISTAS.forEach((k) => (f[k].value = String(a[k])));
+  bloquearAlertas(); pintarColaAlertas();
+  $("#dlg-ajustes").returnValue = ""; $("#dlg-ajustes").showModal();
+});
+$("#form-ajustes").alertas_activas.addEventListener("change", bloquearAlertas);
+$("#dlg-ajustes").addEventListener("close", async () => {
+  if ($("#dlg-ajustes").returnValue !== "ok") return;
+  const f = $("#form-ajustes"), cuerpo = {};
+  AJ_SI_NO.forEach((k) => (cuerpo[k] = f[k].checked));
+  AJ_LISTAS.forEach((k) => (cuerpo[k] = k === "analisis" ? f[k].value : Number(f[k].value)));
+  try { await api("PUT", "/api/ajustes", cuerpo); aviso("Ajustes guardados ✓"); recargar(); }
+  catch (e) { aviso("Error: " + e.message); }
 });
 
 // ---------- OFERTAS ----------

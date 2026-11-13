@@ -23,8 +23,8 @@ import modelos
 sys.path.insert(0, os.path.join(datos.RAIZ, "herramientas"))
 import ats_fetch  # noqa: E402
 
-MAX_ANALIZAR = 15          # tope de ofertas nuevas que se analizan a fondo por búsqueda (controla el coste)
-MAX_CRIBA = 45             # candidatas que pasan antes por la criba barata por título
+# Tope de ofertas nuevas analizadas a fondo por búsqueda: lo elige ella en Ajustes («busqueda_max», 15 por defecto).
+# Antes pasan por la criba barata por título hasta el triple.
 HILOS = 4
 _en_marcha = threading.Lock()
 
@@ -277,7 +277,8 @@ def _ejecutar():
                 elegidas.append(j)
         cliente = anthropic.Anthropic(api_key=cv_ia._api_key(), max_retries=3)
         # Criba barata por título (Haiku, céntimos) antes del análisis a fondo: no gastar en lo que no encaja
-        elegidas = elegidas[:MAX_CRIBA]
+        max_analizar = datos.ajuste("busqueda_max")
+        elegidas = elegidas[:max_analizar * 3]
         if elegidas:
             import correo_ia
             _estado(fase=f"Filtrando {len(elegidas)} ofertas por el título…")
@@ -285,7 +286,7 @@ def _ejecutar():
             pasan, _ = correo_ia._criba(cliente, puestos)
             ok = {(p["titulo"], p["empresa"]) for p in pasan}
             elegidas = [j for j, p in zip(elegidas, puestos) if (p["titulo"], p["empresa"]) in ok]
-        nuevas = elegidas[:MAX_ANALIZAR]
+        nuevas = elegidas[:max_analizar]
         if not nuevas:
             _estado(estado="listo", fase="No hay ofertas nuevas que encajen con tus preferencias.", total=0,
                     fin=_dt.datetime.now().isoformat(timespec="seconds"))

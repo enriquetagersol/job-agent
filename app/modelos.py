@@ -35,7 +35,14 @@ PRECIOS = {
 }
 
 
+AHORRABLES = {"analizar_oferta", "investigar_oferta"}  # en «modo ahorro» (Ajustes de la app) usan Haiku
+
+
 def para(tarea):
+    if tarea in AHORRABLES:
+        import datos
+        if datos.ajuste("analisis") == "ahorro":
+            return HAIKU
     return TAREAS.get(tarea, SONNET)
 
 
